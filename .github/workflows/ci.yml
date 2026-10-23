@@ -28,6 +28,8 @@ jobs:
           .\scripts\Test-Sources.ps1
           .\scripts\Test-OfficeRemoval.ps1
           .\scripts\Test-Reliability.ps1
+          .\scripts\Test-Inventory.ps1
+          .\scripts\Test-UpdateOnly.ps1
       - name: Compile owned executable
         run: .\scripts\Build.ps1
       - name: Smoke-test embedded UI resources without installing apps
@@ -39,6 +41,7 @@ jobs:
           Get-Content -LiteralPath $result
           .\scripts\Test-Reports.ps1
           .\scripts\Test-WorkerDiagnostics.ps1
+          .\scripts\Test-Selections.ps1
       - name: Upload explicitly unsigned build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

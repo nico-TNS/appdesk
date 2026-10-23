@@ -15,7 +15,7 @@ foreach($attribute in @('AssemblyVersion','AssemblyFileVersion','AssemblyInforma
 }
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase,System.Xaml
 $window=[Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText((Join-Path $root 'src\Interface.xaml')))
-foreach($name in @('Overall','ActivityBar','Cards','Install','OfficeEdition','UninstallOffice','ChooseForti','AutoForti','OpenLogs','ReportPanel','ReportRows','ReportSummary','ExportReport','BackToApps','ShowReport')){if(!$window.FindName($name)){throw "Missing UI control $name"}}
+foreach($name in @('Overall','ActivityBar','Cards','Install','OfficeEdition','UninstallOffice','ChooseForti','AutoForti','OpenLogs','ReportPanel','ReportRows','ReportSummary','ExportReport','BackToApps','ShowReport','UpdatePresent','SaveSelection','LoadSelection','RefreshVersions','VersionsStatus','RetryFailed')){if(!$window.FindName($name)){throw "Missing UI control $name"}}
 $window.Close()
 $xml=New-Object Xml.XmlDocument
 $xml.XmlResolver=$null

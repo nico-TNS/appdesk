@@ -17,6 +17,9 @@ if(($plan.operations|Where-Object id -eq 'Fortinet.VPN').automatic){throw 'Manua
 $job.Forti=''
 $job.Update=$true;Write-Job;$plan=Invoke-Plan
 if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments -contains '--no-upgrade'){throw 'Mode mise a jour incorrect.'}
+$job.UpdateOnly=$true;Write-Job;$plan=Invoke-Plan
+if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments[0] -ne 'upgrade'){throw 'Update-only would install absent applications.'}
+$job.UpdateOnly=$false;Write-Job
 foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024Retail','Professional2024Retail','Standard2024Volume','ProPlus2024Volume')){
     $job.Office=$product;Write-Job;$plan=Invoke-Plan
     $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)

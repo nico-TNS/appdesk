@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.0-preview.1
+
+- Show installed and available versions with asynchronous read-only inventory and refresh.
+- Prepare update-only queues for installed catalogue applications; preserve supported Office edition/channel and reject absent products before installer IO.
+- Save/restore validated application selections without consent or destructive-operation confirmations.
+- Retry only explicitly failed applications from the final report, preserving previous attempt settings and requiring a new review.
+- Add inventory, selection and update-only regression tests; fix UTF-8 accents in the older GitHub preview title.
+
 ## v2.3.0-preview.1 — reliability controls (file version 2.3.0.0)
 
 - Atomic download publication, bounded transient retries and partial-file cleanup.

@@ -1,12 +1,16 @@
-﻿# AppDesk
+# AppDesk
 
 Installateur Windows personnel, libre et portable, avec sélection d’applications, installation silencieuse et suivi de progression. Licence [MIT](LICENSE).
 
-**État : préversion non signée (`v2.3.0-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
+**Version stable : [2.3.0](https://github.com/nico-TNS/appdesk/releases/tag/v2.3.0). Nouvelles fonctions : [2.4.0-preview.1](https://github.com/nico-TNS/appdesk/releases/tag/v2.4.0-preview.1), non signée. La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
 
 ![Interface AppDesk, état de progression illustratif](docs/screenshot.png)
 
 ## Fonctionnalités
+- Versions installées et disponibles sur les cartes, recherche en arrière-plan et bouton Actualiser.
+- **Mettre à jour les apps présentes** prépare la sélection des applications détectées, sans installer les absentes. Office conserve son édition et son canal pris en charge.
+- **Enregistrer la sélection / Restaurer**, avec restauration au lancement. Les licences et confirmations de suppression ne sont pas mémorisées.
+- **Réessayer uniquement les échecs** prépare les seules applications en échec pour une nouvelle tentative.
 
 - Chrome, Firefox, Opera, Acrobat Reader, WireGuard, OpenVPN Community, client Windows 3CX et Office.
 - FortiClient VPN téléchargé automatiquement depuis le portail officiel régional Fortinet, avec vérification de sa signature et de sa version. Package local facultatif.

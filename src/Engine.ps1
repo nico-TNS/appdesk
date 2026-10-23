@@ -11,6 +11,7 @@ foreach($id in $job.Ids){if($id -notin $allowed){throw 'Application non autorise
 if(!$channels.ContainsKey([string]$job.Office)){throw 'Edition Office non reconnue.'}
 $removeOffice=$job.Action -eq 'RemoveOffice'
 if($job.Action -and $job.Action -notin @('Install','RemoveOffice')){throw 'Action non autorisee.'}
+if($job.UpdateOnly -and (!$job.Update -or $removeOffice)){throw 'Mode mise a jour seule incompatible avec cette operation.'}
 if($job.ReplaceStandaloneOneNoteConfirmed -and ($removeOffice -or $job.Office -notin @('Standard2024Volume','ProPlus2024Volume') -or 'Microsoft.Office' -notin $job.Ids)){throw 'Remplacement OneNote non autorise pour cette operation.'}
 if($removeOffice){
     if($job.Ids.Count -ne 1 -or $job.Ids[0] -ne 'Microsoft.Office' -or !$job.RemovalConfirmed){throw 'La desinstallation Office exige une action distincte et sa confirmation.'}
@@ -32,7 +33,8 @@ function Office-Xml {
 "@
 }
 function Winget-Arguments($id){
-    $arguments=@('install','--id',$id,'--exact','--source','winget','--silent','--accept-package-agreements','--accept-source-agreements','--disable-interactivity')
+    $operation=if($job.UpdateOnly){'upgrade'}else{'install'}
+    $arguments=@($operation,'--id',$id,'--exact','--source','winget','--silent','--accept-package-agreements','--accept-source-agreements','--disable-interactivity')
     if(!$job.Update){$arguments+='--no-upgrade'}
     return $arguments
 }
@@ -102,6 +104,7 @@ function Installed-Forti {
     return $false
 }
 function Install-Forti {
+    if($job.UpdateOnly -and !(Installed-Forti)){throw 'FortiClient est absent : aucune installation en mode mise a jour seule.'}
     if((Installed-Forti) -and !$job.Update){return -1978335135} # 0x8A150061 : deja installe
     $package=$job.Forti
     if(!$package){
@@ -177,6 +180,14 @@ function Remove-Office {
     return $code
 }
 function Install-Office {
+    if($job.UpdateOnly){
+        $config=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration' -ErrorAction SilentlyContinue
+        if(!$config -or [string]$job.Office -notin @([string]$config.ProductReleaseIds -split ',')){throw 'Edition Office absente ou changee : mise a jour seule annulee.'}
+        $expectedChannel=$channels[[string]$job.Office]
+        $expectedCdn=if($expectedChannel -eq 'PerpetualVL2024'){'7983bac0-e531-40cf-be00-fd24fe66619c'}else{'492350f6-3a01-4f97-b9c0-c7c6ddf67d60'}
+        $channelUrl=if($config.UpdateChannel){[string]$config.UpdateChannel}else{[string]$config.CDNBaseUrl}
+        if($job.OfficeChannel -ne $expectedChannel -or $channelUrl -notmatch $expectedCdn){throw 'Canal Office non pris en charge ou change : aucune migration automatique.'}
+    }
     foreach($key in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
         $existing=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
         if($existing.ProductReleaseIds){

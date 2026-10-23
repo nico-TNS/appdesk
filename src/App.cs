@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.3.0.0")]
-[assembly: AssemblyInformationalVersion("2.3.0.0")]
-[assembly: AssemblyVersion("2.3.0.0")]
+[assembly: AssemblyFileVersion("2.4.0.0")]
+[assembly: AssemblyInformationalVersion("2.4.0.0")]
+[assembly: AssemblyVersion("2.4.0.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -35,6 +35,11 @@ public sealed class AppItem : INotifyPropertyChanged {
  bool selected; string status="";
  public bool Selected {get{return selected;} set{selected=value;Changed("Selected");}}
  public string Status {get{return status;} set{status=value;Changed("Status");}}
+ string installedText="Installée : recherche…",availableText="Disponible : recherche…",versionHint="";
+ public bool Installed {get;set;}
+ public string InstalledText {get{return installedText;} set{installedText=value;Changed("InstalledText");}}
+ public string AvailableText {get{return availableText;} set{availableText=value;Changed("AvailableText");}}
+ public string VersionHint {get{return versionHint;} set{versionHint=value;Changed("VersionHint");}}
  public event PropertyChangedEventHandler PropertyChanged;
  void Changed(string name){if(PropertyChanged!=null)PropertyChanged(this,new PropertyChangedEventArgs(name));}
 }
@@ -43,6 +48,24 @@ public sealed class Job {
  public string Forti {get;set;} public string Winget {get;set;} public bool Simulate {get;set;}
  public string Action {get;set;} public string[] OfficeProducts {get;set;} public bool RemovalConfirmed {get;set;}
  public bool ReplaceStandaloneOneNoteConfirmed {get;set;}
+ public bool UpdateOnly {get;set;} public string OfficeChannel {get;set;}
+}
+public sealed class SelectionProfile {public int Schema{get;set;} public string[] Ids{get;set;} public string Office{get;set;} public bool Update{get;set;}}
+public sealed class InventoryRow {public string Id{get;set;} public bool Installed{get;set;} public string InstalledVersion{get;set;} public string AvailableVersion{get;set;} public string Source{get;set;} public string Issue{get;set;} public string OfficeProduct{get;set;} public string OfficeChannel{get;set;}}
+public sealed class OfficeVersion {public string Channel{get;set;} public string Version{get;set;}}
+public sealed class InventorySnapshot {public bool Complete{get;set;} public string CheckedAt{get;set;} public InventoryRow[] Rows{get;set;} public OfficeVersion[] OfficeVersions{get;set;}}
+public static class SelectionTools {
+ public static SelectionProfile Validate(SelectionProfile p){
+  string[] products={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume"};
+  var allowed=Entry.Catalog().Select(a=>a.Id).ToArray();
+  if(p==null||p.Schema!=1||p.Ids==null||p.Ids.Length>9||p.Ids.Distinct().Count()!=p.Ids.Length||p.Ids.Any(id=>!allowed.Contains(id))||!products.Contains(p.Office))throw new InvalidDataException("Sélection enregistrée invalide ou incompatible.");
+  return p;
+ }
+ public static string[] Failed(State state,Job job){
+  if(state==null||job==null||job.Ids==null||state.outcomes==null)return new string[0];
+  var allowed=Entry.Catalog().Select(a=>a.Id);
+  return job.Ids.Where(id=>allowed.Contains(id)&&state.outcomes.Any(o=>o.id==id&&o.status=="Échec")).Distinct().ToArray();
+ }
 }
 public sealed class Outcome {public string id{get;set;} public string status{get;set;} public string detail{get;set;} public int code{get;set;}}
 public sealed class ReportRow {public string Title{get;set;} public string Status{get;set;} public string Detail{get;set;} public string Code{get;set;} public string Color{get;set;}}
@@ -114,6 +137,7 @@ public static class Entry {
   string xaml=Resource("ui");var w=(Window)XamlReader.Parse(xaml);
   if(w.FindName("Overall")==null||w.FindName("Install")==null)throw new Exception("Interface invalide.");
   if(w.FindName("ReportPanel")==null||Resource("sources").IndexOf("Get-FortiSource")<0)throw new Exception("Ressources de bilan ou sources absentes.");
+  if(w.FindName("RetryFailed")==null||w.FindName("UpdatePresent")==null||Resource("inventory").IndexOf("Read-OfficeVersions")<0)throw new Exception("Ressources des versions et sélections absentes.");
   w.Close();
   if(path!=null)File.WriteAllText(path,"Catalogue: 9\nWPF: OK\nRessources embarquées: OK\nAucune installation lancée.");
   return 0;
@@ -128,11 +152,13 @@ public sealed class InstallerUi {
  string category="",forti="",runPath="",settingsRoot;bool running,simulating,removingOffice;
  Process worker;DispatcherTimer timer;DateTime startTime;State lastState;
  AppItem[] queuedApps;List<ReportRow> reportRows;string reportText="";DateTime? reportEndedAt;
+ Job reportJob;bool updateOnly,refreshPending;InventorySnapshot inventory;Process inventoryProcess;DispatcherTimer inventoryTimer;string inventoryFolder,inventoryFile;
  readonly string[] args;
  T Find<T>(string name)where T:class{return Window.FindName(name)as T;}
  public InstallerUi(string[] arguments){
   args=arguments;settingsRoot=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),"AppDesk");
   Window=(Window)XamlReader.Parse(Entry.Resource("ui"));
+  Window.MinHeight=Math.Min(Window.MinHeight,Math.Max(500,SystemParameters.WorkArea.Height-40));Window.Height=Math.Min(Window.Height,SystemParameters.WorkArea.Height-40);
   cards=Find<ItemsControl>("Cards");search=Find<TextBox>("Search");edition=Find<ComboBox>("OfficeEdition");
   updates=Find<CheckBox>("UpdateExisting");consent=Find<CheckBox>("Consent");install=Find<Button>("Install");stop=Find<Button>("Stop");
   title=Find<TextBlock>("ProgressTitle");completed=Find<TextBlock>("Completed");activity=Find<TextBlock>("Activity");fortiHint=Find<TextBlock>("FortiHint");overall=Find<ProgressBar>("Overall");activityBar=Find<ProgressBar>("ActivityBar");
@@ -142,11 +168,17 @@ public sealed class InstallerUi {
   edition.SelectedIndex=0;
   search.TextChanged+=(s,e)=>view.Refresh();
   Find<Button>("NavAll").Click+=(s,e)=>Navigate("");Find<Button>("NavWeb").Click+=(s,e)=>Navigate("Navigateurs");Find<Button>("NavVpn").Click+=(s,e)=>Navigate("VPN");Find<Button>("NavWork").Click+=(s,e)=>Navigate("Bureautique");
-  Find<Button>("SelectAll").Click+=(s,e)=>{foreach(AppItem item in view)item.Selected=true;};
-  Find<Button>("ClearAll").Click+=(s,e)=>{foreach(var item in apps)item.Selected=false;};
+  Find<Button>("SelectAll").Click+=(s,e)=>{updateOnly=false;foreach(AppItem item in view)item.Selected=true;UpdateSelection();};
+  Find<Button>("ClearAll").Click+=(s,e)=>{updateOnly=false;foreach(var item in apps)item.Selected=false;UpdateSelection();};
   consent.Checked+=(s,e)=>UpdateSelection();consent.Unchecked+=(s,e)=>UpdateSelection();
   Find<Button>("ChooseForti").Click+=(s,e)=>ChooseForti();
   Find<Button>("AutoForti").Click+=(s,e)=>{forti="";DetectForti();};
+  Find<Button>("RefreshVersions").Click+=(s,e)=>RefreshVersions();
+  Find<Button>("UpdatePresent").Click+=(s,e)=>SelectPresent();
+  Find<Button>("SaveSelection").Click+=(s,e)=>SaveSelection();
+  Find<Button>("LoadSelection").Click+=(s,e)=>LoadSelection(true);
+  Find<Button>("RetryFailed").Click+=(s,e)=>RetryFailed();
+  edition.SelectionChanged+=(s,e)=>ApplyInventory();
   Find<Button>("UninstallOffice").Click+=(s,e)=>StartOfficeRemoval();
   Find<Button>("BackToApps").Click+=(s,e)=>ShowReport(false);
   Find<Button>("ShowReport").Click+=(s,e)=>ShowReport(true);
@@ -157,17 +189,98 @@ public sealed class InstallerUi {
   stop.Click+=(s,e)=>{File.WriteAllText(Path.Combine(runPath,"stop.request"),"stop");stop.IsEnabled=false;activity.Text="Arrêt demandé après l’application en cours.";};
   Find<Button>("CloseWindow").Click+=(s,e)=>Window.Close();Find<Button>("Minimize").Click+=(s,e)=>Window.WindowState=WindowState.Minimized;
   Find<System.Windows.Controls.Grid>("TitleBar").MouseLeftButtonDown+=(s,e)=>{if(e.ClickCount==2)return;Window.DragMove();};
-  Window.Closing+=(s,e)=>{if(running){e.Cancel=true;activity.Text="Utilisez « Arrêter après cette app » et attendez la fin de l’installation en cours.";}};
+  Window.Closing+=(s,e)=>{if(running){e.Cancel=true;activity.Text="Utilisez « Arrêter après cette app » et attendez la fin de l’installation en cours.";}else if(inventoryProcess!=null){try{if(!inventoryProcess.HasExited)inventoryProcess.Kill();}catch{}inventoryProcess.Dispose();inventoryProcess=null;if(inventoryTimer!=null)inventoryTimer.Stop();}};
   Window.Loaded+=(s,e)=>OnLoaded();
   timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(350)};timer.Tick+=(s,e)=>Poll();
   DetectForti();UpdateSelection();
+ }
+ void SaveSelection(){
+  try{
+   var profile=SelectionTools.Validate(new SelectionProfile{Schema=1,Ids=apps.Where(a=>a.Selected).Select(a=>a.Id).ToArray(),Office=products[edition.SelectedIndex],Update=updates.IsChecked==true});
+   Directory.CreateDirectory(settingsRoot);string path=Path.Combine(settingsRoot,"selection.json"),temp=path+".tmp";
+   File.WriteAllText(temp,Entry.Json.Serialize(profile),new UTF8Encoding(false));
+   if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);
+   activity.Text="Sélection enregistrée. Elle sera restaurée au prochain lancement.";
+  }catch(Exception ex){activity.Text="Enregistrement impossible : "+ex.Message;}
+ }
+ void LoadSelection(bool explicitLoad){
+  try{
+   string path=Path.Combine(settingsRoot,"selection.json");if(!File.Exists(path)){if(explicitLoad)activity.Text="Aucune sélection enregistrée.";return;}
+   if(new FileInfo(path).Length>65536)throw new InvalidDataException("Fichier de sélection trop volumineux.");
+   var profile=SelectionTools.Validate(Entry.Json.Deserialize<SelectionProfile>(File.ReadAllText(path,Encoding.UTF8)));
+   updateOnly=false;foreach(var a in apps)a.Selected=profile.Ids.Contains(a.Id);edition.SelectedIndex=Array.IndexOf(products,profile.Office);updates.IsChecked=profile.Update;
+   consent.IsChecked=false;UpdateSelection();activity.Text="Sélection restaurée. Vérifiez les choix avant de lancer l’installation.";
+  }catch(Exception ex){activity.Text="Restauration impossible : "+ex.Message;}
+ }
+ void RetryFailed(){
+  if(running)return;var ids=SelectionTools.Failed(lastState,reportJob);if(ids.Length==0)return;
+  if(reportJob.Action=="RemoveOffice"){StartOfficeRemoval();return;}
+  updateOnly=reportJob.UpdateOnly;foreach(var a in apps)a.Selected=ids.Contains(a.Id);
+  int index=Array.IndexOf(products,reportJob.Office);if(index>=0)edition.SelectedIndex=index;
+  updates.IsChecked=reportJob.Update;forti=reportJob.Forti??"";DetectForti();consent.IsChecked=false;
+  category="";search.Text="";view.Refresh();ShowReport(false);UpdateSelection();
+  activity.Text=ids.Length+" échec(s) sélectionné(s). Vérifiez puis lancez la nouvelle tentative.";
+ }
+ void SelectPresent(){
+  if(running)return;
+  if(inventory==null||inventory.Rows==null){activity.Text="La détection des applications est encore en cours.";return;}
+  var office=inventory.Rows.FirstOrDefault(r=>r.Id=="Microsoft.Office"&&r.Installed);
+  bool officeSupported=office!=null&&Array.IndexOf(products,office.OfficeProduct)>=0&&office.OfficeChannel== (office.OfficeProduct.EndsWith("Volume")?"PerpetualVL2024":"Current");
+  updateOnly=true;
+  foreach(var a in apps)a.Selected=inventory.Rows.Any(r=>r.Id==a.Id&&r.Installed)&&(a.Kind!="office"||officeSupported);
+  if(officeSupported)edition.SelectedIndex=Array.IndexOf(products,office.OfficeProduct);
+  updates.IsChecked=true;forti="";DetectForti();consent.IsChecked=false;category="";search.Text="";view.Refresh();ShowReport(false);UpdateSelection();
+  activity.Text="Mode mise à jour seule : aucune application absente ne sera installée."+(office!=null&&!officeSupported?" Office exclu : édition ou canal non pris en charge.":"");
+ }
+ void RefreshVersions(){
+  if(running)return;if(inventoryProcess!=null){refreshPending=true;return;}
+  try{
+   inventoryFolder=Path.Combine(Path.GetTempPath(),"AppDesk-inventory-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(inventoryFolder);
+   foreach(string resource in new[]{"inventory","sources"})File.WriteAllText(Path.Combine(inventoryFolder,resource=="inventory"?"Inventory.ps1":"Sources.ps1"),Entry.Resource(resource),new UTF8Encoding(true));
+   inventoryFile=Path.Combine(inventoryFolder,"versions.json");
+   var p=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),@"WindowsPowerShell\v1.0\powershell.exe"));
+   p.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Entry.Quote(Path.Combine(inventoryFolder,"Inventory.ps1"))+" -OutputPath "+Entry.Quote(inventoryFile)+" -Winget "+Entry.Quote(Winget());
+   p.UseShellExecute=false;p.CreateNoWindow=true;p.RedirectStandardError=true;
+   inventoryProcess=Process.Start(p);var errors=inventoryProcess.StandardError.ReadToEndAsync();
+   Find<Button>("RefreshVersions").IsEnabled=false;Find<TextBlock>("VersionsStatus").Text="Recherche des versions en ligne…";
+   inventoryTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(600)};
+   inventoryTimer.Tick+=(s,e)=>{
+    try{if(File.Exists(inventoryFile)){var value=Entry.Json.Deserialize<InventorySnapshot>(File.ReadAllText(inventoryFile,Encoding.UTF8));inventory=value;ApplyInventory();}}catch(IOException){}catch(ArgumentException){}
+    if(inventoryProcess!=null&&inventoryProcess.HasExited){
+     bool ok=inventory!=null&&inventory.Complete&&inventoryProcess.ExitCode==0;inventoryTimer.Stop();inventoryProcess.Dispose();inventoryProcess=null;
+     Find<Button>("RefreshVersions").IsEnabled=!running;
+     Find<TextBlock>("VersionsStatus").Text=ok?"Versions vérifiées à "+DateTime.Now.ToString("HH:mm")+" · dernière version connue des sources":"Recherche incomplète · cliquez sur Actualiser";
+     Find<TextBlock>("VersionsStatus").ToolTip=errors.IsCompleted?errors.Result:"";
+     try{Directory.Delete(inventoryFolder,true);}catch(IOException){}catch(UnauthorizedAccessException){}
+     if(refreshPending){refreshPending=false;RefreshVersions();}
+    }
+   };inventoryTimer.Start();
+  }catch(Exception ex){Find<TextBlock>("VersionsStatus").Text="Recherche impossible : "+ex.Message;Find<Button>("RefreshVersions").IsEnabled=true;}
+ }
+ void ApplyInventory(){
+  if(inventory==null||inventory.Rows==null)return;
+  if(inventory.Complete){DateTime checkedAt;Find<TextBlock>("VersionsStatus").Text="Versions consultées"+(DateTime.TryParse(inventory.CheckedAt,out checkedAt)?" à "+checkedAt.ToString("HH:mm"):"")+" · sources en ligne";}
+  foreach(var a in apps){
+   var row=inventory.Rows.FirstOrDefault(r=>r.Id==a.Id);if(row==null)continue;
+   a.Installed=row.Installed;
+   a.InstalledText="Installée : "+(row.Installed?(string.IsNullOrEmpty(row.InstalledVersion)?"version inconnue":row.InstalledVersion):"absente");
+   string available=row.AvailableVersion,source=row.Source,issue=row.Issue;
+   if(a.Kind=="office"){
+    string channel=products[Math.Max(0,edition.SelectedIndex)].EndsWith("Volume")?"PerpetualVL2024":"Current";
+    var v=inventory.OfficeVersions==null?null:inventory.OfficeVersions.FirstOrDefault(x=>x.Channel==channel);available=v==null?"":v.Version;source="Microsoft · "+channel;
+    if(row.Installed)source+="\nProduit installé : "+row.OfficeProduct+" · "+row.OfficeChannel;
+   }
+   a.AvailableText="Disponible : "+(!string.IsNullOrEmpty(available)?available:!string.IsNullOrEmpty(issue)||inventory.Complete?"indisponible":"recherche…");
+   a.VersionHint=a.InstalledText+"\n"+a.AvailableText+"\n"+source+(string.IsNullOrEmpty(issue)?"":"\n"+issue)+"\nLecture seule : version résolue de nouveau à l’installation.";
+  }
  }
  bool Filter(object value){var app=(AppItem)value;return(category==""||app.Category==category)&&(app.Title.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0||app.Subtitle.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0);}
  void Navigate(string value){ShowReport(false);category=value;view.Refresh();}
  void UpdateSelection(){
   int count=apps.Count(a=>a.Selected);if(!running)completed.Text=count+" application"+(count>1?"s":"")+" sélectionnée"+(count>1?"s":"");
   install.IsEnabled=!running&&count>0&&consent.IsChecked==true;
-  edition.IsEnabled=!running&&apps.Any(a=>a.Kind=="office"&&a.Selected);
+  if(!running)install.Content=updateOnly?"Mettre à jour la sélection  →":"Installer la sélection  →";
+  edition.IsEnabled=!running&&!updateOnly&&apps.Any(a=>a.Kind=="office"&&a.Selected);
  }
  bool IsFullPackage(string path){
   if(Path.GetExtension(path).Equals(".msi",StringComparison.OrdinalIgnoreCase))return true;
@@ -186,9 +299,10 @@ public sealed class InstallerUi {
  }
  void Enable(bool enabled){
   cards.IsEnabled=enabled;search.IsEnabled=enabled;updates.IsEnabled=enabled;consent.IsEnabled=enabled;
-  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","AutoForti","UninstallOffice","NavAll","NavWeb","NavVpn","NavWork","ShowReport"})Find<Button>(name).IsEnabled=enabled;
+  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","AutoForti","UninstallOffice","NavAll","NavWeb","NavVpn","NavWork","ShowReport","UpdatePresent","SaveSelection","LoadSelection","RetryFailed"})Find<Button>(name).IsEnabled=enabled;
+  Find<Button>("RefreshVersions").IsEnabled=enabled&&inventoryProcess==null;
   stop.Visibility=enabled?Visibility.Collapsed:Visibility.Visible;stop.IsEnabled=true;UpdateSelection();
-  install.Content=enabled?"Installer la sélection  →":"En cours…";
+  install.Content=enabled?(updateOnly?"Mettre à jour la sélection  →":"Installer la sélection  →"):"En cours…";
  }
  string Winget(){
   string alias=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),@"Microsoft\WindowsApps\winget.exe");
@@ -199,7 +313,8 @@ public sealed class InstallerUi {
  void Start(bool demo){
   var selected=apps.Where(a=>a.Selected).ToArray();if(selected.Length==0||running)return;
   string winget=Winget();if(!demo&&selected.Any(a=>a.Kind=="winget")&&winget==""){MessageBox.Show(Window,"Installez « Programme d’installation d’application » de Microsoft pour disposer de WinGet.","WinGet requis");return;}
-  var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo,Action="Install"};
+  var officeRow=inventory==null||inventory.Rows==null?null:inventory.Rows.FirstOrDefault(r=>r.Id=="Microsoft.Office");
+  var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updateOnly||updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo,Action="Install",UpdateOnly=updateOnly,OfficeChannel=updateOnly&&officeRow!=null?officeRow.OfficeChannel:null};
   if(!demo&&selected.Any(a=>a.Id=="Microsoft.Office")&&job.Office.EndsWith("Volume")&&InstalledOfficeProducts().Contains("OneNoteFreeRetail")){
    string message="OneNote autonome est encore installé. Microsoft ne prend pas en charge cette édition autonome avec Office LTSC.\n\nPour installer l’édition LTSC choisie, l’outil Microsoft retirera OneNote autonome et installera OneNote avec la nouvelle suite Office. Vos blocs-notes ne sont pas ciblés par la suppression ; vérifiez leur synchronisation ou sauvegarde et fermez OneNote avant de continuer.\n\nConfirmer ce remplacement de OneNote pendant l’installation Office ?";
    if(MessageBox.Show(Window,message,"Compatibilité OneNote et Office LTSC",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
@@ -237,6 +352,7 @@ public sealed class InstallerUi {
  void StartJob(Job job,AppItem[] selected,bool demo){
   try{
    removingOffice=job.Action=="RemoveOffice";
+   reportJob=Entry.Json.Deserialize<Job>(Entry.Json.Serialize(job));
    queuedApps=selected;reportEndedAt=null;ShowReport(false);Find<Button>("ShowReport").Visibility=Visibility.Collapsed;
    runPath=Path.Combine(settingsRoot,"Sessions",DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(runPath);
    string path=Path.Combine(runPath,"job.json");File.WriteAllText(path,Entry.Json.Serialize(job),new UTF8Encoding(false));
@@ -279,6 +395,7 @@ public sealed class InstallerUi {
    foreach(var app in apps.Where(a=>a.Status=="Dans la file"))app.Status="Non traitée";
   }
   BuildReport(state);ShowReport(true);Find<Button>("ShowReport").Visibility=Visibility.Visible;
+  if(!simulating&&!args.Contains("--preview"))RefreshVersions();
   if(simulating&&args.Contains("--test-run")){
    string output=ArgumentValue("--test-run");if(output!=null){Directory.CreateDirectory(output);File.WriteAllText(Path.Combine(output,"simulation-result.json"),Entry.Json.Serialize(state));File.WriteAllText(Path.Combine(output,"report.txt"),reportText);Capture(Path.Combine(output,"simulation.png"));}
    ExitCode=state!=null&&state.done&&state.completed==9?0:1;Window.Close();
@@ -286,6 +403,7 @@ public sealed class InstallerUi {
  }
  void ShowReport(bool show){Find<Grid>("ReportPanel").Visibility=show?Visibility.Visible:Visibility.Collapsed;Find<Grid>("CatalogPanel").Visibility=show?Visibility.Collapsed:Visibility.Visible;}
  void BuildReport(State state){
+  lastState=state;
   var results=state==null||state.outcomes==null?new List<Outcome>():state.outcomes;
   reportRows=new List<ReportRow>();
   foreach(var app in queuedApps??new AppItem[0]){
@@ -301,6 +419,7 @@ public sealed class InstallerUi {
   Find<TextBlock>("ReportContext").Text=(simulating?"Simulation : aucune application installée. · ":"")+ended.ToString("dd/MM/yyyy HH:mm")+" · Durée : "+(ended-startTime).ToString(@"hh\:mm\:ss")+(state!=null&&state.reboot?" · Redémarrage requis, non lancé.":"");
   Find<TextBlock>("ReportIssue").Text=state!=null&&state.fatal?state.message:state==null||!state.done?"Résultats partiels : le moteur s’est arrêté sans bilan complet.":"";
   Find<ItemsControl>("ReportRows").ItemsSource=reportRows;
+  Find<Button>("RetryFailed").Visibility=SelectionTools.Failed(state,reportJob).Length>0?Visibility.Visible:Visibility.Collapsed;
   var text=new StringBuilder();text.AppendLine("APPDESK — "+Find<TextBlock>("ReportTitle").Text);text.AppendLine(Find<TextBlock>("ReportContext").Text);text.AppendLine(Find<TextBlock>("ReportSummary").Text);text.AppendLine(Find<TextBlock>("ReportIssue").Text);
   foreach(var row in reportRows){text.AppendLine();text.AppendLine(row.Title+" : "+row.Status);text.AppendLine(row.Detail);text.AppendLine(row.Code);}
   string sources=Path.Combine(runPath,"sources.jsonl");if(File.Exists(sources)){text.AppendLine();text.AppendLine("Provenance des téléchargements vérifiés :");text.AppendLine(File.ReadAllText(sources));}
@@ -309,11 +428,13 @@ public sealed class InstallerUi {
  }
  string ArgumentValue(string key){int n=Array.IndexOf(args,key);return n>=0&&n+1<args.Length?args[n+1]:null;}
  void OnLoaded(){
+  string snapshot=ArgumentValue("--inventory-snapshot");if(snapshot!=null&&args.Contains("--preview")){inventory=Entry.Json.Deserialize<InventorySnapshot>(File.ReadAllText(snapshot));ApplyInventory();}
   string requestedEdition=ArgumentValue("--office-edition");
   if(requestedEdition!=null&&Array.IndexOf(products,requestedEdition)>=0){edition.SelectedIndex=Array.IndexOf(products,requestedEdition);apps.First(a=>a.Id=="Microsoft.Office").Selected=true;}
   string session=ArgumentValue("--report-session");
   if(session!=null){
    runPath=Path.GetFullPath(session);var job=Entry.Json.Deserialize<Job>(File.ReadAllText(Path.Combine(runPath,"job.json")));removingOffice=job.Action=="RemoveOffice";
+   reportJob=job;
    queuedApps=apps.Where(a=>job.Ids.Contains(a.Id)).ToArray();startTime=Directory.GetCreationTime(runPath);reportEndedAt=File.GetLastWriteTime(Path.Combine(runPath,"state.json"));simulating=job.Simulate;
    var state=Entry.Json.Deserialize<State>(File.ReadAllText(Path.Combine(runPath,"state.json")));BuildReport(state);ShowReport(true);Find<Button>("ShowReport").Visibility=Visibility.Visible;
   }
@@ -323,6 +444,10 @@ public sealed class InstallerUi {
    Window.Dispatcher.BeginInvoke(new Action(()=>{Capture(preview);Window.Close();}),DispatcherPriority.ApplicationIdle);
   }
   if(args.Contains("--test-run")){foreach(var app in apps)app.Selected=true;consent.IsChecked=true;Start(true);}
+  if(session==null&&!args.Contains("--preview")&&!args.Contains("--test-run")){
+   if(requestedEdition==null){var detected=InstalledOfficeProducts();if(detected.Length==1&&Array.IndexOf(products,detected[0])>=0)edition.SelectedIndex=Array.IndexOf(products,detected[0]);}
+   LoadSelection(false);RefreshVersions();
+  }
  }
  void Capture(string path){
   Window.UpdateLayout();

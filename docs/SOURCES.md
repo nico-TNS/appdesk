@@ -1,4 +1,4 @@
-﻿# Automatic publisher sources
+# Automatic publisher sources
 
 AppDesk resolves versions at the start of each requested installation. It does not run an updater in the background.
 
@@ -30,3 +30,5 @@ Source-resolution and download-signature checks are distinct from real installat
 Preview 2.3 uses unique partial files and up to three attempts for transient binary-transfer errors. Retries start again from the beginning; an interrupted transfer is not resumed by byte range. A failed transfer cannot replace an existing file. The installation queue is guarded against overlap with other new AppDesk engines. See the [compatibility matrix](COMPATIBILITY.md) for actual evidence and pending validation.
 
 When standalone OneNote remains before an LTSC installation, AppDesk requires separate confirmation to replace it with the OneNote included in LTSC; without confirmation it never adds a OneNote removal to the install configuration. See Microsoft OneNote deployment guidance: https://learn.microsoft.com/en-us/deployoffice/deployment-guide-onenote
+
+AppDesk 2.4 performs read-only version discovery using the uninstall registry and WinGet list, WinGet show for catalogue metadata, the official regional Fortinet page, and https://clients.config.office.net/releases/v1.0/OfficeReleases for Office channel builds. Metadata is never executed. Unavailable versions remain explicit. Office LTSC uses PerpetualVL2024 rather than Current. Installation resolves versions again.
