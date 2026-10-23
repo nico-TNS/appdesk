@@ -13,6 +13,12 @@ if($plan.operations[0].action -ne 'RemoveOffice' -or $xml.Configuration.Remove.A
 & $engine -JobPath $path
 $state=Get-Content (Join-Path $temp 'state.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if(!$state.done -or $state.completed -ne 1 -or $state.outcomes[0].status -ne 'Désinstallée'){throw 'Removal simulation failed.'}
+$job.OfficeProducts=@('OneNoteFreeRetail');Write-RemovalJob
+$plan=& $engine -JobPath $path -Plan|ConvertFrom-Json
+if(([xml]$plan.operations[0].xml).Configuration.Remove.Product.ID -ne 'OneNoteFreeRetail'){throw 'OneNote-only cleanup is not supported.'}
+$job.OfficeProducts=@('O365HomePremRetail','OneNoteFreeRetail');Write-RemovalJob
+$plan=& $engine -JobPath $path -Plan|ConvertFrom-Json
+if(@(([xml]$plan.operations[0].xml).Configuration.Remove.Product).Count -ne 2){throw 'Office and OneNote cleanup is not supported.'}
 $job.RemovalConfirmed=$false;Write-RemovalJob;Assert-Rejected
 $job.RemovalConfirmed=$true;$job.OfficeProducts=@('VisioPro2024Volume');Write-RemovalJob;Assert-Rejected
 $job.OfficeProducts=@('O365HomePremRetail');$job.Ids=@('Microsoft.Office','Google.Chrome');Write-RemovalJob;Assert-Rejected

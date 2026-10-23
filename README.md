@@ -2,7 +2,7 @@
 
 Installateur Windows personnel, libre et portable, avec sélection d’applications, installation silencieuse et suivi de progression. Licence [MIT](LICENSE).
 
-**État : préversion non signée (`v2.2.0-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
+**État : préversion non signée (`v2.2.1-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
 
 ![Interface AppDesk, état de progression illustratif](docs/screenshot.png)
 
@@ -14,7 +14,7 @@ Installateur Windows personnel, libre et portable, avec sélection d’applicati
 - Une fenêtre de suivi, progression globale par applications traitées et activité par application.
 - Mise à jour des applications sélectionnées activée par défaut, arrêt après l’application en cours, bilan final intégré et exportable.
 - Résolution en ligne du dernier outil Office et de la version disponible du canal choisi. Voir [la politique des sources](docs/SOURCES.md).
-- Bouton **Désinstaller Office…** : suppression ciblée de la suite Click-to-Run détectée, confirmation séparée et rapport final. OneNote autonome, Visio et Project ne sont pas ciblés ; les variantes MSI/Store restent à gérer dans Windows.
+- Bouton **Office Removal — Office + OneNote…** : suppression ciblée de la suite Click-to-Run et de OneNote autonome, confirmation séparée et rapport final. Visio et Project ne sont pas ciblés ; les variantes MSI/Store restent à gérer dans Windows. Une suppression de OneNote seul est aussi possible.
 
 ## Installation et utilisation
 

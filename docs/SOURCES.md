@@ -1,4 +1,4 @@
-# Automatic publisher sources
+﻿# Automatic publisher sources
 
 AppDesk resolves versions at the start of each requested installation. It does not run an updater in the background.
 
@@ -19,10 +19,12 @@ An integrated report opens after completion, errors or stopping. It lists each q
 
 ## Office removal
 
-**Désinstaller Office…** is a separate action. It detects compatible Office Click-to-Run suite IDs, displays the products to remove and requires explicit confirmation before UAC. The current signed Microsoft ODT is used with targeted `<Remove All="FALSE"><Product ID="..." /></Remove>` entries. No `Add`, `RemoveMSI` or blanket `Remove All="TRUE"` is generated. The suite allowlist excludes standalone OneNote, Visio and Project. Windows MSI/Store installations are not removed by this action; use Windows installed-apps settings for those.
+**Office Removal — Office + OneNote…** is a separate action, including OneNote-only cleanup. It detects compatible Office Click-to-Run suite IDs, displays the products to remove and requires explicit confirmation before UAC. The current signed Microsoft ODT is used with targeted `<Remove All="FALSE"><Product ID="..." /></Remove>` entries. No `Add`, `RemoveMSI` or blanket `Remove All="TRUE"` is generated. The removal allowlist includes Office suite IDs and OneNoteFreeRetail. Visio and Project remain excluded. Windows MSI/Store installations are not removed by this action; use Windows installed-apps settings for those.
 
 The engine checks the confirmed targets against the installed suite IDs again before removal, refuses to proceed while Office apps are running, does not force-close processes or restart the PC, and checks for remaining targeted IDs after a successful non-reboot result. A removal-specific final report is generated. It does not reinstall another edition automatically, cancel subscriptions or explicitly delete personal documents. Keep your license/account available for a later reinstall. Plan/simulation tests do not establish a successful real uninstall on every supported Office product.
 
 Microsoft documents [targeted ODT removal](https://learn.microsoft.com/en-us/microsoft-365-apps/deploy/office-deployment-tool-configuration-options#remove-element). Its separate Get Help uninstall troubleshooter does not currently support Office 2024, so AppDesk does not depend on that troubleshooter.
 
 Source-resolution and download-signature checks are distinct from real installation tests. No promise is made that all VPN configurations or every future publisher package remain compatible or fully silent.
+
+When standalone OneNote remains before an LTSC installation, AppDesk requires separate confirmation to replace it with the OneNote included in LTSC; without confirmation it never adds a OneNote removal to the install configuration. See Microsoft OneNote deployment guidance: https://learn.microsoft.com/en-us/deployoffice/deployment-guide-onenote

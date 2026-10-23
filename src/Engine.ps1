@@ -11,6 +11,7 @@ foreach($id in $job.Ids){if($id -notin $allowed){throw 'Application non autorise
 if(!$channels.ContainsKey([string]$job.Office)){throw 'Edition Office non reconnue.'}
 $removeOffice=$job.Action -eq 'RemoveOffice'
 if($job.Action -and $job.Action -notin @('Install','RemoveOffice')){throw 'Action non autorisee.'}
+if($job.ReplaceStandaloneOneNoteConfirmed -and ($removeOffice -or $job.Office -notin @('Standard2024Volume','ProPlus2024Volume') -or 'Microsoft.Office' -notin $job.Ids)){throw 'Remplacement OneNote non autorise pour cette operation.'}
 if($removeOffice){
     if($job.Ids.Count -ne 1 -or $job.Ids[0] -ne 'Microsoft.Office' -or !$job.RemovalConfirmed){throw 'La desinstallation Office exige une action distincte et sa confirmation.'}
     $removalXml=Get-OfficeRemovalXml @($job.OfficeProducts)
@@ -19,6 +20,7 @@ if($removeOffice){
 function Office-Xml {
 @"
 <Configuration>
+ $(if($job.ReplaceStandaloneOneNoteConfirmed){'<Remove All="FALSE"><Product ID="OneNoteFreeRetail" /></Remove>'})
  <Add OfficeClientEdition="64" Channel="$($channels[[string]$job.Office])">
   <Product ID="$($job.Office)"><Language ID="fr-fr" /></Product>
  </Add>
@@ -172,7 +174,7 @@ function Get-OfficeSetup {
     return $setup
 }
 function Remove-Office {
-    $installed=@(Get-InstalledOfficeSuiteIds)
+    $installed=@(Get-InstalledOfficeRemovalIds)
     if(!@($job.OfficeProducts|Where-Object {$_ -in $installed}).Count){return -1978335135}
     if(@($job.OfficeProducts|Where-Object {$_ -notin $installed}).Count){throw 'Les produits Office ont change depuis la confirmation. Recommencez la detection.'}
     if(Get-Process -Name WINWORD,EXCEL,POWERPNT,OUTLOOK,MSACCESS,MSPUB,ONENOTE,VISIO,WINPROJ -ErrorAction SilentlyContinue){throw 'Fermez les applications Office et enregistrez vos documents avant la desinstallation. Aucun processus ne sera ferme automatiquement.'}
@@ -181,17 +183,19 @@ function Remove-Office {
     [IO.File]::WriteAllText($xml,(Get-OfficeRemovalXml @($job.OfficeProducts)),(New-Object Text.UTF8Encoding($false)))
     Report 'Désinstallation' 'Suppression des seuls produits Office confirmés, via Microsoft…'
     $code=Run-Hidden $setup @('/configure',('"'+$xml+'"')) 'office-remove'
-    if($code -eq 0 -and @((Get-InstalledOfficeSuiteIds)|Where-Object {$_ -in $job.OfficeProducts}).Count){throw 'Microsoft a termine mais les produits Office sont encore detectes. Consultez les journaux.'}
+    if($code -eq 0 -and @((Get-InstalledOfficeRemovalIds)|Where-Object {$_ -in $job.OfficeProducts}).Count){throw 'Microsoft a termine mais les produits Office sont encore detectes. Consultez les journaux.'}
     return $code
 }
 function Install-Office {
     foreach($key in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
         $existing=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
         if($existing.ProductReleaseIds){
-            if(([string]$existing.ProductReleaseIds -split ',') -contains [string]$job.Office){
-                if(!$job.Update){return -1978335135}
-                if($existing.Platform -and $existing.Platform -ne 'x64'){throw 'Office 32 bits est deja present. La mise a jour x64 necessite une migration manuelle.'}
-            }else{throw 'Une autre edition Office est deja presente. Aucune desinstallation automatique nʼa ete effectuee.'}
+            $disposition=Get-OfficeInstallDisposition @([string]$existing.ProductReleaseIds -split ',') ([string]$job.Office) ([string]$existing.Platform) ([bool]$job.Update)
+            if($disposition -eq 'Keep'){return -1978335135}
+            if($job.Office -in @('Standard2024Volume','ProPlus2024Volume') -and 'OneNoteFreeRetail' -in @([string]$existing.ProductReleaseIds -split ',')){
+                if(!$job.ReplaceStandaloneOneNoteConfirmed){throw 'Confirmation requise pour remplacer OneNote autonome par OneNote inclus dans Office LTSC. Relancez la selection dans AppDesk.'}
+                if(Get-Process -Name ONENOTE,WINWORD,EXCEL,POWERPNT,OUTLOOK,MSACCESS,MSPUB -ErrorAction SilentlyContinue){throw 'Enregistrez vos documents et fermez Office et OneNote avant le remplacement confirme. Aucun processus ne sera ferme automatiquement.'}
+            }
         }
     }
     $setup=Get-OfficeSetup

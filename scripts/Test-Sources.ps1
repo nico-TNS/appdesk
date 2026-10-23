@@ -14,10 +14,16 @@ Expect-Failure {Assert-DownloadUri 'https://download.microsoft.com.attacker.exam
 Expect-Failure {Assert-DownloadUri 'https://user@download.microsoft.com/a.exe' @('download.microsoft.com')}
 Expect-Failure {Assert-DownloadUri 'https://download.microsoft.com:444/a.exe' @('download.microsoft.com')}
 Expect-Failure {Test-FortiDownload $PSCommandPath ([version]'7.4.3.6002')}
-$remove=[xml](Get-OfficeRemovalXml @('O365HomePremRetail','ProPlus2024Volume'))
-if($remove.Configuration.Remove.All -ne 'FALSE' -or $remove.Configuration.Remove.Product.Count -ne 2 -or $remove.Configuration.Add -or $remove.Configuration.RemoveMSI -or $remove.Configuration.Property.Value -ne 'FALSE'){throw 'Office removal scope broadened.'}
-foreach($id in @('OneNoteFreeRetail','VisioPro2024Volume','ProjectPro2024Volume','O365HomePremRetail"/><Remove All="TRUE"/>','')){Expect-Failure {Get-OfficeRemovalXml @($id)}}
+$remove=[xml](Get-OfficeRemovalXml @('O365HomePremRetail','OneNoteFreeRetail'))
+if($remove.Configuration.Remove.All -ne 'FALSE' -or $remove.Configuration.Remove.Product.Count -ne 2 -or $remove.Configuration.Remove.Product.ID -notcontains 'OneNoteFreeRetail' -or $remove.Configuration.Add -or $remove.Configuration.RemoveMSI -or $remove.Configuration.Property.Value -ne 'FALSE'){throw 'Office and OneNote removal scope is incorrect.'}
+foreach($id in @('VisioPro2024Volume','ProjectPro2024Volume','O365HomePremRetail"/><Remove All="TRUE"/>','')){Expect-Failure {Get-OfficeRemovalXml @($id)}}
 Expect-Failure {Get-OfficeRemovalXml @('O365HomePremRetail','O365HomePremRetail')}
+if((Get-OfficeInstallDisposition @('OneNoteFreeRetail') 'Standard2024Volume' 'x64' $true) -ne 'Install'){throw 'Standalone OneNote falsely blocks Office installation.'}
+if((Get-OfficeInstallDisposition @('OneNoteFreeRetail','VisioPro2024Volume','ProjectPro2024Volume') 'O365BusinessRetail' 'x64' $true) -ne 'Install'){throw 'Standalone products were mistaken for an Office suite.'}
+if((Get-OfficeInstallDisposition @('O365BusinessRetail','OneNoteFreeRetail') 'O365BusinessRetail' 'x64' $false) -ne 'Keep'){throw 'Existing matching suite is not preserved.'}
+if((Get-OfficeInstallDisposition @('O365BusinessRetail','OneNoteFreeRetail') 'O365BusinessRetail' 'x64' $true) -ne 'Update'){throw 'Existing matching suite cannot update.'}
+Expect-Failure {Get-OfficeInstallDisposition @('O365HomePremRetail','OneNoteFreeRetail') 'Standard2024Volume' 'x64' $true}
+Expect-Failure {Get-OfficeInstallDisposition @('OneNoteFreeRetail') 'Standard2024Volume' 'x86' $true}
 if($Online){
     $office=Get-OfficeSource;$forti=Get-FortiSource
     if($FortiPackage){Test-FortiDownload $FortiPackage $forti.Version}

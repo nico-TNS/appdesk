@@ -38,6 +38,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if ((Get-Content VERSION -Raw).Trim() -ne '2.2.0.0') { throw 'Unexpected preview version.' }
-          gh release create v2.2.0-preview.1 dist/MonInstallateur.exe dist/SHA256SUMS.txt --target $env:GITHUB_SHA --prerelease --title "AppDesk 2.2 - désinstallation Office intégrée" --notes-file docs/releases/v2.2.0-preview.1.md
+          if ((Get-Content VERSION -Raw).Trim() -ne '2.2.1.0') { throw 'Unexpected preview version.' }
+          gh release create v2.2.1-preview.1 dist/MonInstallateur.exe dist/SHA256SUMS.txt --target $env:GITHUB_SHA --prerelease --title "AppDesk 2.2.1 - installation Office après désinstallation" --notes-file docs/releases/v2.2.1-preview.1.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

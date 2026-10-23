@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.2.1-preview.1 — allow installation after suite removal (file version 2.2.1.0)
+
+- Fix the guard that mistook standalone OneNote for an existing Office suite after removal.
+- Include standalone OneNote in the dedicated Office Removal action and support OneNote-only cleanup.
+- Offer an explicitly confirmed standalone-OneNote replacement when installing LTSC, per Microsoft's compatibility requirements.
+- Preserve different-suite and 32-bit architecture conflict checks; let Microsoft ODT handle standalone-product coexistence.
+- Add regression tests for the actual OneNote-only post-removal state and related suite/architecture cases.
+
 ## v2.2.0-preview.1 — targeted Office removal (file version 2.2.0.0)
 
 - Separate Office removal action with installed-product detection and a No-default confirmation.

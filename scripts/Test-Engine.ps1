@@ -23,7 +23,10 @@ foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024
     if($xml.Configuration.Display.Level -ne 'None' -or $xml.Configuration.Add.Product.ID -ne $product -or $xml.Configuration.RemoveMSI){throw 'Configuration Office incorrecte.'}
     if($xml.Configuration.Add.Version -or $xml.Configuration.Add.SourcePath -or $xml.Configuration.Updates.Enabled -ne 'TRUE'){throw 'Office is pinned to an old build or local cache.'}
 }
-Write-Job
+$job.Office='Standard2024Volume';$job.ReplaceStandaloneOneNoteConfirmed=$true;Write-Job;$plan=Invoke-Plan
+$xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
+if($xml.Configuration.Remove.All -ne 'FALSE' -or $xml.Configuration.Remove.Product.ID -ne 'OneNoteFreeRetail' -or $xml.Configuration.Add.Product.ID -ne 'Standard2024Volume' -or $xml.Configuration.RemoveMSI){throw 'Confirmed OneNote replacement is not narrowly scoped.'}
+$job.ReplaceStandaloneOneNoteConfirmed=$false;Write-Job
 & $engine -JobPath (Join-Path $temp 'job.json')
 $state=Get-Content -LiteralPath (Join-Path $temp 'state.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if(!$state.done -or $state.fatal -or $state.completed -ne 9){throw 'Simulation incomplete.'}

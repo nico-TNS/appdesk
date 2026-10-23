@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.2.0.0")]
-[assembly: AssemblyInformationalVersion("2.2.0.0")]
-[assembly: AssemblyVersion("2.2.0.0")]
+[assembly: AssemblyFileVersion("2.2.1.0")]
+[assembly: AssemblyInformationalVersion("2.2.1.0")]
+[assembly: AssemblyVersion("2.2.1.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -42,6 +42,7 @@ public sealed class Job {
  public string[] Ids {get;set;} public bool Update {get;set;} public string Office {get;set;}
  public string Forti {get;set;} public string Winget {get;set;} public bool Simulate {get;set;}
  public string Action {get;set;} public string[] OfficeProducts {get;set;} public bool RemovalConfirmed {get;set;}
+ public bool ReplaceStandaloneOneNoteConfirmed {get;set;}
 }
 public sealed class Outcome {public string id{get;set;} public string status{get;set;} public string detail{get;set;} public int code{get;set;}}
 public sealed class ReportRow {public string Title{get;set;} public string Status{get;set;} public string Detail{get;set;} public string Code{get;set;} public string Color{get;set;}}
@@ -183,17 +184,24 @@ public sealed class InstallerUi {
   var selected=apps.Where(a=>a.Selected).ToArray();if(selected.Length==0||running)return;
   string winget=Winget();if(!demo&&selected.Any(a=>a.Kind=="winget")&&winget==""){MessageBox.Show(Window,"Installez « Programme d’installation d’application » de Microsoft pour disposer de WinGet.","WinGet requis");return;}
   var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo,Action="Install"};
+  if(!demo&&selected.Any(a=>a.Id=="Microsoft.Office")&&job.Office.EndsWith("Volume")&&InstalledOfficeProducts().Contains("OneNoteFreeRetail")){
+   string message="OneNote autonome est encore installé. Microsoft ne prend pas en charge cette édition autonome avec Office LTSC.\n\nPour installer l’édition LTSC choisie, l’outil Microsoft retirera OneNote autonome et installera OneNote avec la nouvelle suite Office. Vos blocs-notes ne sont pas ciblés par la suppression ; vérifiez leur synchronisation ou sauvegarde et fermez OneNote avant de continuer.\n\nConfirmer ce remplacement de OneNote pendant l’installation Office ?";
+   if(MessageBox.Show(Window,message,"Compatibilité OneNote et Office LTSC",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
+   job.ReplaceStandaloneOneNoteConfirmed=true;
+  }
   StartJob(job,selected,demo);
  }
- string[] InstalledOfficeSuites(){
+ string[] InstalledOfficeProducts(){
   var found=new List<string>();
   foreach(var view in new[]{RegistryView.Registry64,RegistryView.Registry32})using(var hive=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))using(var key=hive.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration")){
-   if(key!=null)foreach(var id in Convert.ToString(key.GetValue("ProductReleaseIds","")).Split(','))if(Regex.IsMatch(id,@"^(?:O365[A-Za-z0-9]*Retail|(?:HomeBusiness|HomeStudent|Professional|ProPlus|Standard|Personal)(?:20(?:16|19|21|24))?(?:Retail|Volume))$"))found.Add(id);
+   if(key!=null)foreach(var id in Convert.ToString(key.GetValue("ProductReleaseIds","")).Split(','))if(id!="")found.Add(id);
   }
   return found.Distinct().OrderBy(x=>x).ToArray();
  }
+ string[] InstalledOfficeRemovalProducts(){return InstalledOfficeProducts().Where(id=>id=="OneNoteFreeRetail"||Regex.IsMatch(id,@"^(?:O365[A-Za-z0-9]*Retail|(?:HomeBusiness|HomeStudent|Professional|ProPlus|Standard|Personal)(?:20(?:16|19|21|24))?(?:Retail|Volume))$")).ToArray();}
  string OfficeProductName(string id){
   if(id=="O365HomePremRetail")return "Microsoft 365 Personnel / Famille";
+  if(id=="OneNoteFreeRetail")return "Microsoft OneNote (autonome)";
   if(id.StartsWith("O365Business"))return "Microsoft 365 Apps — Business";
   if(id.StartsWith("O365ProPlus"))return "Microsoft 365 Apps — Enterprise";
   var names=new[]{"Microsoft 365 Apps — Business","Microsoft 365 Apps — Enterprise","Office 2024 — Famille et Petite Entreprise","Office 2024 — Professionnel","Office LTSC 2024 — Standard","Office LTSC 2024 — Professionnel Plus"};
@@ -202,10 +210,10 @@ public sealed class InstallerUi {
  void StartOfficeRemoval(){
   if(running)return;
   string[] targets;
-  try{targets=InstalledOfficeSuites();}catch(Exception ex){MessageBox.Show(Window,"Détection Office impossible : "+ex.Message,"Désinstaller Office");return;}
-  if(targets.Length==0){MessageBox.Show(Window,"Aucune suite Office Click-to-Run compatible n’a été détectée. Les anciennes installations MSI et les versions Microsoft Store doivent être supprimées depuis les applications installées de Windows.","Désinstaller Office",MessageBoxButton.OK,MessageBoxImage.Information);return;}
+  try{targets=InstalledOfficeRemovalProducts();}catch(Exception ex){MessageBox.Show(Window,"Détection Office impossible : "+ex.Message,"Désinstaller Office");return;}
+  if(targets.Length==0){MessageBox.Show(Window,"Aucune suite Office ni OneNote autonome Click-to-Run compatible n’a été détecté. Les anciennes installations MSI et les versions Microsoft Store doivent être supprimées depuis les applications installées de Windows.","Désinstaller Office",MessageBoxButton.OK,MessageBoxImage.Information);return;}
   string list=string.Join("\n",targets.Select(id=>"• "+OfficeProductName(id)).ToArray());
-  string message="Les produits suivants seront désinstallés :\n\n"+list+"\n\nFermez Word, Excel, Outlook et les autres applications Office après avoir enregistré vos documents. Aucun programme ouvert ne sera fermé automatiquement.\n\nOneNote autonome, Visio et Project ne sont pas ciblés. Cette action ne supprime pas vos documents personnels et ne résilie pas votre abonnement. Une licence sera nécessaire pour réinstaller Office.\n\nConfirmer la désinstallation de cette sélection ?";
+  string message="Les produits suivants seront désinstallés :\n\n"+list+"\n\nOffice Removal inclut OneNote autonome lorsqu’il est présent. Vérifiez la synchronisation ou la sauvegarde de vos blocs-notes, enregistrez vos documents et fermez Office et OneNote. Aucun programme ouvert ne sera fermé automatiquement.\n\nVisio et Project ne sont pas ciblés. Cette action ne supprime pas vos documents personnels et ne résilie pas votre abonnement. Une licence sera nécessaire pour réinstaller Office.\n\nConfirmer la désinstallation de cette sélection ?";
   if(MessageBox.Show(Window,message,"Confirmer la désinstallation Office",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
   var job=new Job{Ids=new[]{"Microsoft.Office"},Office=products[edition.SelectedIndex],Action="RemoveOffice",OfficeProducts=targets,RemovalConfirmed=true,Simulate=false};
   StartJob(job,new[]{apps.First(a=>a.Id=="Microsoft.Office")},false);
@@ -284,6 +292,8 @@ public sealed class InstallerUi {
  }
  string ArgumentValue(string key){int n=Array.IndexOf(args,key);return n>=0&&n+1<args.Length?args[n+1]:null;}
  void OnLoaded(){
+  string requestedEdition=ArgumentValue("--office-edition");
+  if(requestedEdition!=null&&Array.IndexOf(products,requestedEdition)>=0){edition.SelectedIndex=Array.IndexOf(products,requestedEdition);apps.First(a=>a.Id=="Microsoft.Office").Selected=true;}
   string session=ArgumentValue("--report-session");
   if(session!=null){
    runPath=Path.GetFullPath(session);var job=Entry.Json.Deserialize<Job>(File.ReadAllText(Path.Combine(runPath,"job.json")));removingOffice=job.Action=="RemoveOffice";

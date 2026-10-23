@@ -3,16 +3,25 @@ $script:OfficePage='https://www.microsoft.com/en-us/download/details.aspx?id=491
 $script:FortiPage='https://support.fortinet.com.cn/vpn/forticlient_vpn/fct_download'
 $script:OfficeSuitePattern='^(?:O365[A-Za-z0-9]*Retail|(?:HomeBusiness|HomeStudent|Professional|ProPlus|Standard|Personal)(?:20(?:16|19|21|24))?(?:Retail|Volume))$'
 function Test-OfficeSuiteId([string]$Id){return $Id -match $script:OfficeSuitePattern}
+function Test-OfficeRemovalId([string]$Id){return (Test-OfficeSuiteId $Id) -or $Id -eq 'OneNoteFreeRetail'}
+function Get-OfficeInstallDisposition([string[]]$InstalledProducts,[string]$RequestedProduct,[string]$Platform,[bool]$Update){
+    if($InstalledProducts.Count -and $Platform -and $Platform -ne 'x64'){throw 'Office 32 bits est deja present. La migration x64 doit etre effectuee manuellement.'}
+    $suites=@($InstalledProducts|Where-Object {Test-OfficeSuiteId $_})
+    if(!$suites.Count){return 'Install'}
+    if($RequestedProduct -notin $suites){throw 'Une autre suite Office est deja presente. Utilisez Desinstaller Office avant de changer edition.'}
+    if($Update){return 'Update'}
+    return 'Keep'
+}
 function Get-OfficeRemovalXml([string[]]$Products){
     if(!$Products.Count -or @($Products|Select-Object -Unique).Count -ne $Products.Count){throw 'Liste de produits Office vide ou dupliquee.'}
-    foreach($product in $Products){if(!(Test-OfficeSuiteId $product)){throw 'Produit Office non autorise pour la desinstallation ciblee.'}}
+    foreach($product in $Products){if(!(Test-OfficeRemovalId $product)){throw 'Produit Office non autorise pour la desinstallation ciblee.'}}
     $items=($Products|ForEach-Object {'<Product ID="'+$_+'" />'}) -join ''
     return '<Configuration><Remove All="FALSE">'+$items+'</Remove><Display Level="None" AcceptEULA="TRUE" /><Property Name="FORCEAPPSHUTDOWN" Value="FALSE" /></Configuration>'
 }
-function Get-InstalledOfficeSuiteIds {
+function Get-InstalledOfficeRemovalIds {
     @(foreach($root in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
         $config=Get-ItemProperty -LiteralPath $root -ErrorAction SilentlyContinue
-        if($config.ProductReleaseIds){[string]$config.ProductReleaseIds -split ','|Where-Object {Test-OfficeSuiteId $_}}
+        if($config.ProductReleaseIds){[string]$config.ProductReleaseIds -split ','|Where-Object {Test-OfficeRemovalId $_}}
     })|Sort-Object -Unique
 }
 function Assert-DownloadUri([string]$Url,[string[]]$Hosts){

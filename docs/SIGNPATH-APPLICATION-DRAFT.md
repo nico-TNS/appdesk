@@ -1,4 +1,4 @@
-# SignPath Foundation application draft
+﻿# SignPath Foundation application draft
 
 **Draft only. Not submitted.** Replace the pending fields after publishing the project. Do not claim a public release, external users or an operational signing setup before they exist.
 
@@ -20,7 +20,7 @@ Users explicitly select applications, accept the relevant terms and authorize th
 
 ## Why signing is requested
 
-Since preview 2.2, AppDesk also offers a separate Office Click-to-Run suite-removal action. It detects suite IDs, requires a No-default confirmation and Windows elevation, then uses the current signed Microsoft ODT with only the confirmed product IDs. It excludes standalone OneNote, Visio, Project, MSI and Store variants, refuses to force-close Office apps and does not automatically reinstall or reboot. This destructive feature must be included in runtime/security review. It has been tested with plans and simulation, not by removing Office from the development PC.
+Since preview 2.2, AppDesk also offers a separate Office Click-to-Run suite-removal action. It detects suite IDs, requires a No-default confirmation and Windows elevation, then uses the current signed Microsoft ODT with only the confirmed product IDs. Preview 2.2.1 includes standalone OneNote in the confirmed removal scope, but excludes Visio, Project, MSI and Store variants. It refuses to force-close Office apps and does not automatically reinstall or reboot. This destructive feature must be included in runtime/security review. It has been tested with plans and simulation, not by removing Office from the development PC.
 
 The initial unsigned executable was blocked by Windows application-control on the development computer. We want a legitimate, auditable distribution process for the project’s own binary rather than changing users’ security settings. We understand that signing is conditional on your review and is not evidence that every application installation has been audited.
 
