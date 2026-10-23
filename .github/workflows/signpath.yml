@@ -1,0 +1,89 @@
+name: SignPath production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  production:
+    # Enable this repository variable only after SignPath accepts the project.
+    if: github.ref == 'refs/heads/main' && vars.SIGNPATH_ENABLED == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 45
+    environment: signpath-production
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout protected main branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check provider settings without disclosing credentials
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          SIGNPATH_EXPECTED_PUBLISHER: ${{ vars.SIGNPATH_EXPECTED_PUBLISHER }}
+        run: |
+          foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_SIGNING_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG','SIGNPATH_EXPECTED_PUBLISHER')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Required signing setting is missing: $name" }
+          }
+      - name: Validate and simulate
+        run: |
+          .\scripts\Test-Project.ps1
+          .\scripts\Test-Engine.ps1
+      - name: Build from this workflow source
+        id: build
+        run: .\scripts\Build.ps1
+      - name: Upload signing input for GitHub origin verification
+        id: unsigned
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AppDesk-signing-input-${{ github.run_id }}
+          path: dist/MonInstallateur.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Request production signature with manual SignPath approval
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 1800
+          output-artifact-directory: signed
+          parameters: |
+            version: "${{ steps.build.outputs.version }}"
+      - name: Verify signed result and write its own checksum
+        env:
+          SIGNPATH_EXPECTED_PUBLISHER: ${{ vars.SIGNPATH_EXPECTED_PUBLISHER }}
+        run: |
+          $file = Join-Path $pwd 'signed\MonInstallateur.exe'
+          if (!(Test-Path -LiteralPath $file)) { throw 'Signed executable missing.' }
+          $sig = Get-AuthenticodeSignature -LiteralPath $file
+          if ($sig.Status -ne 'Valid') { throw 'Signature is invalid or untrusted.' }
+          if ($sig.SignerCertificate.Subject -notmatch [regex]::Escape($env:SIGNPATH_EXPECTED_PUBLISHER)) { throw 'Unexpected signing publisher.' }
+          $version = (Get-Content .\VERSION -Raw).Trim()
+          $meta = [Diagnostics.FileVersionInfo]::GetVersionInfo($file)
+          if ($meta.ProductName -ne 'AppDesk' -or $meta.FileVersion -ne $version) { throw 'Signed artifact metadata mismatch.' }
+          $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path $pwd 'signed\SHA256SUMS.txt'), "$hash  MonInstallateur.exe`n")
+      - name: Upload signed candidate for maintainer review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AppDesk-signed-${{ github.run_id }}
+          path: |
+            signed/MonInstallateur.exe
+            signed/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30

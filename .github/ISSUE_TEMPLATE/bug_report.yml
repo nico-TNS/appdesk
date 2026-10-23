@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible AppDesk problem without private logs or credentials.
+body:
+  - type: markdown
+    attributes:
+      value: "Remove private paths, VPN profiles, credentials and license keys. Report vulnerabilities privately using SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: AppDesk and Windows versions
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: sanitized
+    attributes:
+      label: Optional redacted error details

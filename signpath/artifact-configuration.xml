@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="MonInstallateur.exe"
+             product-name="AppDesk"
+             product-version="${version}"
+             file-version="${version}"
+             company-name="AppDesk contributors"
+             original-filename="MonInstallateur.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

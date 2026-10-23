@@ -1,0 +1,14 @@
+/dist/
+/test-results/
+/qa-*/
+*.log
+*.exe
+*.msi
+*.msix
+*.pfx
+*.p12
+*.key
+.env
+.vs/
+bin/
+obj/
