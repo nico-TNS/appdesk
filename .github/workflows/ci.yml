@@ -43,6 +43,7 @@ jobs:
           .\scripts\Test-Reports.ps1
           .\scripts\Test-WorkerDiagnostics.ps1
           .\scripts\Test-Selections.ps1
+          .\scripts\Test-LocalSessions.ps1
       - name: Upload explicitly unsigned build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

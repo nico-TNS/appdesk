@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.4.2.0")]
-[assembly: AssemblyInformationalVersion("2.4.2.0")]
-[assembly: AssemblyVersion("2.4.2.0")]
+[assembly: AssemblyFileVersion("2.4.3.0")]
+[assembly: AssemblyInformationalVersion("2.4.3.0")]
+[assembly: AssemblyVersion("2.4.3.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -82,6 +82,12 @@ public static class Entry {
  public static readonly JavaScriptSerializer Json=new JavaScriptSerializer();
  public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s,Encoding.UTF8))return r.ReadToEnd();}
  public static string Quote(string value){return "\""+value.Replace("\"","")+"\"";}
+ public static string LocalSessions(){
+  string path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AppDesk","Sessions");
+  if(path.StartsWith(@"\\"))throw new IOException("Un dossier local est requis pour les sessions AppDesk.");
+  return path;
+ }
+ public static State ReadState(string path){using(var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var reader=new StreamReader(file,Encoding.UTF8))return Json.Deserialize<State>(reader.ReadToEnd());}
  public static List<AppItem> Catalog(){return new List<AppItem>{
   Item("Google.Chrome","Google Chrome","Navigation web","Navigateurs","C","#4285F4","winget"),
   Item("Mozilla.Firefox","Mozilla Firefox","Navigation web","Navigateurs","F","#F17936","winget"),
@@ -154,6 +160,9 @@ public sealed class InstallerUi {
  readonly string[] products=Entry.OfficeProducts;
  string category="",forti="",runPath="",settingsRoot;bool running,simulating,removingOffice;
  Process worker;DispatcherTimer timer;DateTime startTime;State lastState;
+ readonly string sessionRoot=Entry.LocalSessions();
+ Func<string,State> readState=Entry.ReadState;
+ Action<string,string> writeStop=File.WriteAllText;
  AppItem[] queuedApps;List<ReportRow> reportRows;string reportText="";DateTime? reportEndedAt;
  Job reportJob;bool updateOnly,refreshPending;InventorySnapshot inventory;Process inventoryProcess;DispatcherTimer inventoryTimer;string inventoryFolder,inventoryFile;
  readonly string[] args;
@@ -189,7 +198,7 @@ public sealed class InstallerUi {
   Find<Button>("ReportLogs").Click+=(s,e)=>{if(Directory.Exists(runPath))Process.Start(new ProcessStartInfo("explorer.exe",Entry.Quote(runPath)){UseShellExecute=true});};
   Find<System.Windows.Documents.Hyperlink>("OpenLogs").Click+=(s,e)=>{if(Directory.Exists(runPath))Process.Start(new ProcessStartInfo("explorer.exe",Entry.Quote(runPath)){UseShellExecute=true});};
   install.Click+=(s,e)=>Start(false);
-  stop.Click+=(s,e)=>{File.WriteAllText(Path.Combine(runPath,"stop.request"),"stop");stop.IsEnabled=false;activity.Text="Arrêt demandé après l’application en cours.";};
+  stop.Click+=(s,e)=>RequestStop();
   Find<Button>("CloseWindow").Click+=(s,e)=>Window.Close();Find<Button>("Minimize").Click+=(s,e)=>Window.WindowState=WindowState.Minimized;
   Find<System.Windows.Controls.Grid>("TitleBar").MouseLeftButtonDown+=(s,e)=>{if(e.ClickCount==2)return;Window.DragMove();};
   Window.Closing+=(s,e)=>{if(running){e.Cancel=true;activity.Text="Utilisez « Arrêter après cette app » et attendez la fin de l’installation en cours.";}else if(inventoryProcess!=null){try{if(!inventoryProcess.HasExited)inventoryProcess.Kill();}catch{}inventoryProcess.Dispose();inventoryProcess=null;if(inventoryTimer!=null)inventoryTimer.Stop();}};
@@ -363,7 +372,7 @@ public sealed class InstallerUi {
    removingOffice=job.Action=="RemoveOffice";
    reportJob=Entry.Json.Deserialize<Job>(Entry.Json.Serialize(job));
    queuedApps=selected;reportEndedAt=null;ShowReport(false);Find<Button>("ShowReport").Visibility=Visibility.Collapsed;
-   runPath=Path.Combine(settingsRoot,"Sessions",DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(runPath);
+   runPath=Path.Combine(sessionRoot,DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(runPath);
    string path=Path.Combine(runPath,"job.json");File.WriteAllText(path,Entry.Json.Serialize(job),new UTF8Encoding(false));
    foreach(var app in apps)app.Status=selected.Any(a=>a.Id==app.Id)?"Dans la file":"";
    var start=new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--worker "+Entry.Quote(path));
@@ -373,12 +382,23 @@ public sealed class InstallerUi {
   }catch(Win32Exception ex){activity.Text=ex.NativeErrorCode==1223?"Autorisation Windows annulée. Aucune opération n’a démarré.":ex.Message;}
   catch(Exception ex){activity.Text=ex.Message;}
  }
+ void RequestStop(){
+  try{writeStop(Path.Combine(runPath,"stop.request"),"stop");stop.IsEnabled=false;activity.Text="Arrêt demandé après l’application en cours.";}
+  catch(IOException ex){activity.Text="Impossible de transmettre la demande d’arrêt : "+ex.Message;}
+  catch(UnauthorizedAccessException ex){activity.Text="Impossible de transmettre la demande d’arrêt : "+ex.Message;}
+ }
  void Poll(){
-  string path=Path.Combine(runPath,"state.json");
-  try{if(File.Exists(path)){State state;using(var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var reader=new StreamReader(file,Encoding.UTF8)){state=Entry.Json.Deserialize<State>(reader.ReadToEnd());}lastState=state;Apply(state);if(state.done){Finish(state);return;}}}catch(IOException){}catch(ArgumentException){}
+  string path=Path.Combine(runPath,"state.json"),readProblem="";
+  try{if(File.Exists(path)){var state=readState(path);lastState=state;Apply(state);if(state.done){Finish(state);return;}}}
+  catch(IOException ex){readProblem=ex.Message;}catch(UnauthorizedAccessException ex){readProblem=ex.Message;}catch(ArgumentException ex){readProblem=ex.Message;}
+  if(readProblem!="")activity.Text="Suivi temporairement indisponible. L’opération en cours continue. "+readProblem;
   if(worker!=null&&worker.HasExited){
-   try{if(File.Exists(path)){var finalState=Entry.Json.Deserialize<State>(File.ReadAllText(path,Encoding.UTF8));if(finalState.done){lastState=finalState;Apply(finalState);Finish(finalState);return;}}}catch(IOException){}catch(ArgumentException){}
-   if(lastState==null||!lastState.done){Finish(lastState);title.Text="Installation interrompue";activity.Text="Le moteur s’est arrêté sans bilan complet. Consultez le rapport.";ExitCode=simulating?1:0;}
+   try{if(File.Exists(path)){var finalState=readState(path);if(finalState.done){lastState=finalState;Apply(finalState);Finish(finalState);return;}}}catch(IOException ex){readProblem=ex.Message;}catch(UnauthorizedAccessException ex){readProblem=ex.Message;}catch(ArgumentException ex){readProblem=ex.Message;}
+   if(lastState==null||!lastState.done){
+    var incomplete=lastState??new State{total=queuedApps==null?0:queuedApps.Length,outcomes=new List<Outcome>()};
+    incomplete.done=true;incomplete.fatal=true;incomplete.message="Le moteur s’est arrêté sans bilan complet."+(readProblem==""?"":" Lecture du bilan impossible : "+readProblem);
+    Finish(incomplete);ExitCode=simulating?1:0;
+   }
   }
  }
  void Apply(State state){
@@ -431,7 +451,7 @@ public sealed class InstallerUi {
   Find<Button>("RetryFailed").Visibility=SelectionTools.Failed(state,reportJob).Length>0?Visibility.Visible:Visibility.Collapsed;
   var text=new StringBuilder();text.AppendLine("APPDESK — "+Find<TextBlock>("ReportTitle").Text);text.AppendLine(Find<TextBlock>("ReportContext").Text);text.AppendLine(Find<TextBlock>("ReportSummary").Text);text.AppendLine(Find<TextBlock>("ReportIssue").Text);
   foreach(var row in reportRows){text.AppendLine();text.AppendLine(row.Title+" : "+row.Status);text.AppendLine(row.Detail);text.AppendLine(row.Code);}
-  string sources=Path.Combine(runPath,"sources.jsonl");if(File.Exists(sources)){text.AppendLine();text.AppendLine("Provenance des téléchargements vérifiés :");text.AppendLine(File.ReadAllText(sources));}
+  string sources=Path.Combine(runPath,"sources.jsonl");try{if(File.Exists(sources)){text.AppendLine();text.AppendLine("Provenance des téléchargements vérifiés :");text.AppendLine(File.ReadAllText(sources));}}catch(IOException){text.AppendLine("Provenance temporairement illisible.");}catch(UnauthorizedAccessException){text.AppendLine("Accès au journal de provenance refusé.");}
   text.AppendLine();text.AppendLine("Journaux : "+runPath);reportText=text.ToString();
   try{File.WriteAllText(Path.Combine(runPath,"rapport.txt"),reportText,new UTF8Encoding(true));}catch(IOException){}catch(UnauthorizedAccessException){}
  }

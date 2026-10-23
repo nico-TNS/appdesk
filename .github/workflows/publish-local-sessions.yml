@@ -1,0 +1,50 @@
+name: Publish AppDesk 2.4 preview
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-local-sessions.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate project, engine and sources
+        run: |
+          .\scripts\Test-Project.ps1
+          .\scripts\Test-Engine.ps1
+          .\scripts\Test-Sources.ps1
+          .\scripts\Test-OfficeRemoval.ps1
+          .\scripts\Test-Reliability.ps1
+          .\scripts\Test-Inventory.ps1
+          .\scripts\Test-UpdateOnly.ps1
+          .\scripts\Test-FortiPreflight.ps1
+      - name: Compile and verify executable
+        run: |
+          .\scripts\Build.ps1
+          $result = Join-Path $env:RUNNER_TEMP 'self-test.txt'
+          $p = Start-Process -FilePath "$pwd\dist\MonInstallateur.exe" -ArgumentList @('--self-test', ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path $result)) { throw 'Executable self-test failed.' }
+          .\scripts\Test-Reports.ps1
+          .\scripts\Test-WorkerDiagnostics.ps1
+          .\scripts\Test-Selections.ps1
+          .\scripts\Test-LocalSessions.ps1
+      - name: Publish explicitly unsigned preview and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ((Get-Content VERSION -Raw).Trim() -ne '2.4.3.0') { throw 'Unexpected preview version.' }
+          gh release create v2.4.3-preview.1 dist/MonInstallateur.exe dist/SHA256SUMS.txt --target $env:GITHUB_SHA --prerelease --title "AppDesk 2.4.3 - Local sessions" --notes-file docs/releases/v2.4.3-preview.1.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
