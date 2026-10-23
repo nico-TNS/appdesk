@@ -1,8 +1,8 @@
-# AppDesk
+﻿# AppDesk
 
 Installateur Windows personnel, libre et portable, avec sélection d’applications, installation silencieuse et suivi de progression. Licence [MIT](LICENSE).
 
-**État : préversion non signée (`v2.2.1-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
+**État : préversion non signée (`v2.3.0-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
 
 ![Interface AppDesk, état de progression illustratif](docs/screenshot.png)
 
@@ -30,8 +30,10 @@ La progression globale mesure les applications traitées, y compris les échecs 
 
 ## Limites connues
 
+La [matrice de compatibilité](docs/COMPATIBILITY.md) distingue les tests réels, les simulations et les configurations restant à valider. Sur le poste de développement, la suppression de Microsoft 365 et OneNote puis l’installation d’Office LTSC 2024 Standard x64 ont réussi. Les téléchargements sont maintenant retentés sur erreur transitoire, les fichiers partiels sont nettoyés et les nouvelles files concurrentes sont bloquées.
+
 - L’exécutable non signé a été bloqué par le contrôle des applications du poste de développement. Aucun réglage de sécurité n’a été modifié pour le lancer.
-- La compilation, les plans silencieux et les simulations passent localement. Les tests réels de l’exécutable et des installations restent à effectuer dans un environnement autorisé. La [CI GitHub Actions](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) a réussi, y compris le test natif des ressources embarquées.
+- La compilation, les plans silencieux et les simulations passent localement. Les premiers tests réels Office sont consignés dans la matrice ; les autres applications et configurations restent à valider. La [CI GitHub Actions](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) a réussi, y compris le test natif des ressources embarquées.
 - FortiClient utilise la dernière version VPN x64 complète publiée sur le portail régional officiel. Elle peut différer du canal mondial. Si la source change ou devient inaccessible, une erreur est affichée ; le petit lanceur interactif reste refusé.
 - Office nécessite une licence et une activation normales. Une autre édition Click-to-Run présente n’est pas désinstallée automatiquement. Une édition identique x64 peut être actualisée si les mises à jour sont cochées.
 - Les profils VPN et les comptes 3CX restent à configurer. Le mode silencieux dépend du comportement de chaque version d’installateur.

@@ -16,6 +16,8 @@ Session files and package paths are local to the interactive user. The current d
 
 ## Release controls
 
+Preview 2.3 downloads through unique partial files, limits transient-transfer retries and publishes only complete transfers before publisher verification. A named mutex prevents overlapping queues between new engines but is not a security boundary against local malware or older AppDesk versions. Worker output/error logs and fatal startup states are retained locally; they must be redacted before sharing. These controls improve failure handling and do not replace trusted signing, security review or clean-machine installation tests.
+
 Office removal is a distinct, destructive action requiring an explicit No-default UI confirmation and a separate elevated queue. It uses targeted ODT product IDs, not `Remove All=TRUE` or `RemoveMSI`. Suite IDs are allowlisted and checked against installed products again. Standalone OneNote is included in the confirmed removal targets; Visio and Project are excluded. A separate No-default confirmation is required before replacing standalone OneNote during an LTSC installation. Open Office processes block removal rather than being killed. Real uninstallation has not been tested on the development PC; plan and simulation coverage does not prove production compatibility.
 
 Only the repository-built AppDesk artifact is eligible for signing. Do not submit third-party installers or manually replaced binaries. Treat signing tokens, production environments, release approvals and action updates as sensitive. Use MFA and revoke exposed tokens. Signed artifacts must be checked after download; no signature is presently supplied with this preparation.

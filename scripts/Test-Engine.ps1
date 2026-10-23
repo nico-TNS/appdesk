@@ -22,6 +22,7 @@ foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024
     $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
     if($xml.Configuration.Display.Level -ne 'None' -or $xml.Configuration.Add.Product.ID -ne $product -or $xml.Configuration.RemoveMSI){throw 'Configuration Office incorrecte.'}
     if($xml.Configuration.Add.Version -or $xml.Configuration.Add.SourcePath -or $xml.Configuration.Updates.Enabled -ne 'TRUE'){throw 'Office is pinned to an old build or local cache.'}
+    if($xml.Configuration.Add.Channel -ne $xml.Configuration.Updates.Channel){throw 'Office update channel differs from the installation channel.'}
 }
 $job.Office='Standard2024Volume';$job.ReplaceStandaloneOneNoteConfirmed=$true;Write-Job;$plan=Invoke-Plan
 $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)

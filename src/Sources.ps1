@@ -29,13 +29,56 @@ function Assert-DownloadUri([string]$Url,[string[]]$Hosts){
     if(![Uri]::TryCreate($Url,[UriKind]::Absolute,[ref]$uri) -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or !$uri.IsDefaultPort -or $uri.Host -notin $Hosts){throw 'Adresse de telechargement non autorisee.'}
     return $uri
 }
+function Test-TransientDownloadError([Exception]$ErrorObject){
+    while($ErrorObject.InnerException -and $ErrorObject -isnot [Net.WebException] -and $ErrorObject -isnot [IO.IOException]){$ErrorObject=$ErrorObject.InnerException}
+    if($ErrorObject -is [Net.WebException]){
+        if($ErrorObject.Response){$status=[int]$ErrorObject.Response.StatusCode;return $status -in @(408,429,500,502,503,504)}
+        return $ErrorObject.Status -in @([Net.WebExceptionStatus]::Timeout,[Net.WebExceptionStatus]::ConnectFailure,[Net.WebExceptionStatus]::ConnectionClosed,[Net.WebExceptionStatus]::ReceiveFailure,[Net.WebExceptionStatus]::NameResolutionFailure)
+    }
+    return $ErrorObject -is [IO.IOException]
+}
+function Save-PublisherDownload([string]$Url,[string]$File,[string[]]$Hosts,[scriptblock]$Progress){
+    [void](Assert-DownloadUri $Url $Hosts)
+    $partial=$File+'.'+[guid]::NewGuid().ToString('N')+'.part'
+    for($attempt=1;$attempt -le 3;$attempt++){
+        $response=$null;$source=$null;$dest=$null;$retry=$false
+        try{
+            $response=Open-PublisherResponse $Url $Hosts;$length=$response.ContentLength
+            $source=$response.GetResponseStream();$dest=[IO.File]::Create($partial)
+            $buffer=New-Object byte[] 262144;$received=0L;$last=[DateTime]::MinValue
+            while(($n=$source.Read($buffer,0,$buffer.Length)) -gt 0){
+                $dest.Write($buffer,0,$n);$received+=$n
+                if($Progress -and ([DateTime]::Now-$last).TotalMilliseconds -gt 350){& $Progress $received $length $attempt;$last=[DateTime]::Now}
+            }
+            if($received -eq 0 -or ($length -ge 0 -and $received -ne $length)){throw [IO.IOException]::new('Telechargement vide ou incomplet.')}
+            $dest.Dispose();$dest=$null
+            if(Test-Path -LiteralPath $File){[IO.File]::Replace($partial,$File,[NullString]::Value)}else{[IO.File]::Move($partial,$File)}
+            return
+        }catch{
+            if($attempt -lt 3 -and (Test-TransientDownloadError $_.Exception)){$retry=$true}else{throw}
+        }finally{
+            if($dest){$dest.Dispose()};if($source){$source.Dispose()};if($response){$response.Dispose()}
+            if(Test-Path -LiteralPath $partial){Remove-Item -LiteralPath $partial -Force}
+        }
+        if($retry){Start-Sleep -Seconds $attempt}
+    }
+}
+function Enter-AppDeskQueue([bool]$Simulation){
+    $name=if($Simulation){'Local\AppDesk.SimulationQueue'}else{'Global\AppDesk.InstallationQueue'}
+    $mutex=New-Object Threading.Mutex($false,$name)
+    try{
+        try{$owned=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$owned=$true}
+        if(!$owned){throw 'Une autre file AppDesk est deja en cours. Attendez sa fin avant de recommencer.'}
+        return $mutex
+    }catch{$mutex.Dispose();throw}
+}
 function Open-PublisherResponse([string]$Url,[string[]]$Hosts){
     [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
     for($redirect=0;$redirect -le 5;$redirect++){
         $uri=Assert-DownloadUri $Url $Hosts
         $request=[Net.HttpWebRequest]::Create($uri)
         $request.AllowAutoRedirect=$false;$request.Timeout=30000;$request.ReadWriteTimeout=30000
-        $request.UserAgent='AppDesk/2.1 (publisher download resolver)'
+        $request.UserAgent='AppDesk/2.3 (publisher download resolver)'
         $response=$request.GetResponse()
         if([int]$response.StatusCode -in @(301,302,303,307,308)){
             $location=$response.Headers['Location'];$response.Dispose()

@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.3.0-preview.1 — reliability controls (file version 2.3.0.0)
+
+- Atomic download publication, bounded transient retries and partial-file cleanup.
+- Cross-process installation queue guard and captured worker diagnostics.
+- Correct Office update-channel configuration and reboot-required detection timing.
+- Add transfer/queue/worker fault tests and a compatibility matrix that distinguishes real outcomes from simulation.
+
 ## v2.2.1-preview.1 — allow installation after suite removal (file version 2.2.1.0)
 
 - Fix the guard that mistook standalone OneNote for an existing Office suite after removal.

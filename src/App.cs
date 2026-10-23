@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.2.1.0")]
-[assembly: AssemblyInformationalVersion("2.2.1.0")]
-[assembly: AssemblyVersion("2.2.1.0")]
+[assembly: AssemblyFileVersion("2.3.0.0")]
+[assembly: AssemblyInformationalVersion("2.3.0.0")]
+[assembly: AssemblyVersion("2.3.0.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -83,14 +83,30 @@ public static class Entry {
  }
  static int Worker(string path){
   Job job=Json.Deserialize<Job>(File.ReadAllText(path));
-  if(!job.Simulate&&!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))return 740;
+  try{
+  if(!job.Simulate&&!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))throw new InvalidOperationException("Les droits administrateur requis n’ont pas été accordés.");
   string script=Path.Combine(Path.GetDirectoryName(path),"engine.ps1");
   File.WriteAllText(script,Resource("engine"),new UTF8Encoding(true));
   File.WriteAllText(Path.Combine(Path.GetDirectoryName(path),"Sources.ps1"),Resource("sources"),new UTF8Encoding(true));
   var info=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),@"WindowsPowerShell\v1.0\powershell.exe"));
   info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Quote(script)+" -JobPath "+Quote(Path.GetFullPath(path));
-  info.UseShellExecute=false;info.CreateNoWindow=true;info.WindowStyle=ProcessWindowStyle.Hidden;
-  using(var p=Process.Start(info)){p.WaitForExit();return p.ExitCode;}
+  info.UseShellExecute=false;info.CreateNoWindow=true;info.WindowStyle=ProcessWindowStyle.Hidden;info.RedirectStandardOutput=true;info.RedirectStandardError=true;
+  using(var p=Process.Start(info)){
+   var output=p.StandardOutput.ReadToEndAsync();var errors=p.StandardError.ReadToEndAsync();p.WaitForExit();
+   File.WriteAllText(Path.Combine(Path.GetDirectoryName(path),"engine.stdout.log"),output.Result,new UTF8Encoding(true));
+   File.WriteAllText(Path.Combine(Path.GetDirectoryName(path),"engine.stderr.log"),errors.Result,new UTF8Encoding(true));
+   if(p.ExitCode!=0)WorkerFailure(path,job,"Le moteur a échoué (code "+p.ExitCode+"). "+errors.Result);
+   return p.ExitCode;
+  }
+  }catch(Exception ex){WorkerFailure(path,job,"Démarrage du moteur impossible : "+ex.Message);return 1;}
+ }
+ static void WorkerFailure(string path,Job job,string detail){
+  string statePath=Path.Combine(Path.GetDirectoryName(path),"state.json");State state=null;
+  try{if(File.Exists(statePath))state=Json.Deserialize<State>(File.ReadAllText(statePath));}catch{}
+  if(state==null)state=new State{total=job.Ids==null?0:job.Ids.Length,outcomes=new List<Outcome>()};
+  if(state.done&&state.fatal)return;
+  state.done=true;state.fatal=true;state.phase="Interrompu";state.message=detail.Length>1400?detail.Substring(0,1400)+"… Voir engine.stderr.log.":detail;
+  File.WriteAllText(statePath,Json.Serialize(state),new UTF8Encoding(true));
  }
  static int SelfTest(string path){
   var apps=Catalog();
@@ -236,6 +252,7 @@ public sealed class InstallerUi {
   string path=Path.Combine(runPath,"state.json");
   try{if(File.Exists(path)){State state;using(var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var reader=new StreamReader(file,Encoding.UTF8)){state=Entry.Json.Deserialize<State>(reader.ReadToEnd());}lastState=state;Apply(state);if(state.done){Finish(state);return;}}}catch(IOException){}catch(ArgumentException){}
   if(worker!=null&&worker.HasExited){
+   try{if(File.Exists(path)){var finalState=Entry.Json.Deserialize<State>(File.ReadAllText(path,Encoding.UTF8));if(finalState.done){lastState=finalState;Apply(finalState);Finish(finalState);return;}}}catch(IOException){}catch(ArgumentException){}
    if(lastState==null||!lastState.done){Finish(lastState);title.Text="Installation interrompue";activity.Text="Le moteur s’est arrêté sans bilan complet. Consultez le rapport.";ExitCode=simulating?1:0;}
   }
  }
@@ -278,7 +295,7 @@ public sealed class InstallerUi {
    reportRows.Add(new ReportRow{Title=removingOffice&&app.Id=="Microsoft.Office"?"Microsoft Office — désinstallation":app.Title,Status=status,Detail=detail,Code=result==null?"":("Code "+result.code+" · 0x"+unchecked((uint)result.code).ToString("X8")),Color=result==null?"#7C8BA3":status=="Échec"?"#C13C4B":result.code==3010?"#9A6A15":"#237E63"});
   }
   int failed=results.Count(x=>x.status=="Échec"),installed=results.Count(x=>x.code==0||x.code==3010),kept=results.Count-failed-installed,missing=reportRows.Count-results.Count;
-  Find<TextBlock>("ReportTitle").Text=simulating?"Bilan de démonstration":state==null||!state.done||state.fatal||(!state.stopped&&state.completed<state.total)?"Parcours interrompu":state.stopped?"Bilan après arrêt":failed>0?(removingOffice?"Désinstallation terminée avec des erreurs":"Installation terminée avec des erreurs"):removingOffice?"Désinstallation Office terminée":"Votre sélection est prête.";
+  Find<TextBlock>("ReportTitle").Text=state==null||!state.done||state.fatal||(!state.stopped&&state.completed<state.total)?"Parcours interrompu":simulating?"Bilan de démonstration":state.stopped?"Bilan après arrêt":failed>0?(removingOffice?"Désinstallation terminée avec des erreurs":"Installation terminée avec des erreurs"):removingOffice?"Désinstallation Office terminée":"Votre sélection est prête.";
   Find<TextBlock>("ReportSummary").Text=installed+" réussie(s) · "+kept+" conservée(s) · "+failed+" échec(s) · "+Math.Max(0,missing)+" non traitée(s)";
   DateTime ended=reportEndedAt??DateTime.Now;
   Find<TextBlock>("ReportContext").Text=(simulating?"Simulation : aucune application installée. · ":"")+ended.ToString("dd/MM/yyyy HH:mm")+" · Durée : "+(ended-startTime).ToString(@"hh\:mm\:ss")+(state!=null&&state.reboot?" · Redémarrage requis, non lancé.":"");

@@ -27,4 +27,6 @@ Microsoft documents [targeted ODT removal](https://learn.microsoft.com/en-us/mic
 
 Source-resolution and download-signature checks are distinct from real installation tests. No promise is made that all VPN configurations or every future publisher package remain compatible or fully silent.
 
+Preview 2.3 uses unique partial files and up to three attempts for transient binary-transfer errors. Retries start again from the beginning; an interrupted transfer is not resumed by byte range. A failed transfer cannot replace an existing file. The installation queue is guarded against overlap with other new AppDesk engines. See the [compatibility matrix](COMPATIBILITY.md) for actual evidence and pending validation.
+
 When standalone OneNote remains before an LTSC installation, AppDesk requires separate confirmation to replace it with the OneNote included in LTSC; without confirmation it never adds a OneNote removal to the install configuration. See Microsoft OneNote deployment guidance: https://learn.microsoft.com/en-us/deployoffice/deployment-guide-onenote

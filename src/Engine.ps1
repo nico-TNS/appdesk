@@ -25,7 +25,7 @@ function Office-Xml {
   <Product ID="$($job.Office)"><Language ID="fr-fr" /></Product>
  </Add>
  <Display Level="None" AcceptEULA="TRUE" />
- <Updates Enabled="TRUE" />
+ <Updates Enabled="TRUE" Channel="$($channels[[string]$job.Office])" />
  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
  <Property Name="AUTOACTIVATE" Value="0" />
 </Configuration>
@@ -64,21 +64,11 @@ function Verify-Signer($file,$publisher,$hash=''){
 }
 function Download($url,$file,$hosts){
     Report 'Téléchargement' 'Connexion au serveur de téléchargement…'
-    $response=$null;$source=$null;$dest=$null
-    try{
-        $response=Open-PublisherResponse $url $hosts;$length=$response.ContentLength
-        $source=$response.GetResponseStream();$dest=[IO.File]::Create($file)
-        $buffer=New-Object byte[] 262144;$received=0L;$last=[DateTime]::MinValue
-        while(($n=$source.Read($buffer,0,$buffer.Length)) -gt 0){
-            $dest.Write($buffer,0,$n);$received+=$n
-            if(([DateTime]::Now-$last).TotalMilliseconds -gt 350){
-                $percent=if($length -gt 0){[math]::Min(100,[math]::Round(100*$received/$length))}else{-1}
-                Report 'Téléchargement' ("Téléchargement · {0:N1} Mo" -f ($received/1MB)) $percent
-                $last=[DateTime]::Now
-            }
-        }
-        if($length -ge 0 -and $received -ne $length){throw 'Telechargement incomplet.'}
-    }finally{if($dest){$dest.Dispose()};if($source){$source.Dispose()};if($response){$response.Dispose()}}
+    Save-PublisherDownload $url $file $hosts {
+        param($received,$length,$attempt)
+        $percent=if($length -gt 0){[math]::Min(100,[math]::Round(100*$received/$length))}else{-1}
+        Report 'Téléchargement' ("Téléchargement · {0:N1} Mo · tentative {1}/3" -f ($received/1MB),$attempt) $percent
+    }
 }
 function Record-Source($info,$file){
     @{page=$info.Page;url=$info.Url;version=[string]$info.Version;sha256=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant();file=[IO.Path]::GetFileName($file)}|ConvertTo-Json -Compress|Add-Content -LiteralPath (Join-Path $run 'sources.jsonl') -Encoding UTF8
@@ -155,7 +145,7 @@ function Install-Forti {
         Report 'Installation' 'Installation silencieuse de FortiClient VPN…'
         $code=Run-Hidden "$env:SystemRoot\System32\msiexec.exe" @('/i',('"'+$copy+'"'),'/qn','/norestart','REBOOT=ReallySuppress','DONT_PROMPT_REBOOT=1','/L*v',('"'+$log+'"')) 'fortinet'
     }
-    if($code -in @(0,3010) -and !(Installed-Forti)){throw 'Le package sʼest termine mais FortiClient VPN nʼa pas ete detecte.'}
+    if($code -eq 0 -and !(Installed-Forti)){throw 'Le package sʼest termine mais FortiClient VPN nʼa pas ete detecte.'}
     return $code
 }
 function Get-OfficeSetup {
@@ -202,15 +192,17 @@ function Install-Office {
     $xml=Join-Path $run 'office.xml';[IO.File]::WriteAllText($xml,(Office-Xml),(New-Object Text.UTF8Encoding($false)))
     Report 'Installation' 'Téléchargement et installation Office en arrière-plan. Cette étape peut être longue.'
     $code=Run-Hidden $setup @('/configure',('"'+$xml+'"')) 'office'
-    if($code -in @(0,3010)){
+    if($code -eq 0){
         $installed=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration' -ErrorAction SilentlyContinue
         if((([string]$installed.ProductReleaseIds) -split ',') -notcontains [string]$job.Office){throw 'Office nʼa pas ete detecte dans lʼedition demandee.'}
     }
     return $code
 }
 $wingetRefreshed=$false
+$queueLock=$null
 try{
     Save-State
+    $queueLock=Enter-AppDeskQueue ([bool]$job.Simulate)
     foreach($id in $job.Ids){
         if(Test-Path -LiteralPath (Join-Path $run 'stop.request')){$state.stopped=$true;break}
         $state.current=$id
@@ -238,7 +230,8 @@ try{
             }
             $hex='{0:X8}' -f ([long]$code -band 0xFFFFFFFFL)
             if($code -eq 0){if($removeOffice){Outcome $id 'Désinstallée' $code ('Produits retires : '+($job.OfficeProducts -join ', ')+'. Aucune reinstallation automatique.')}else{Outcome $id 'Installée' $code 'Operation terminee avec succes.'}}
-            elseif($code -eq 3010){$state.reboot=$true;Outcome $id 'Redémarrage requis' $code 'Aucun redemarrage automatique.'}
+            elseif($code -eq 3010){$state.reboot=$true;Outcome $id 'Redémarrage requis' $code 'Le programme demande un redemarrage. Verification finale a effectuer apres redemarrage. Aucun redemarrage automatique.'}
+            elseif($code -eq 1618 -or $hex -eq '80070652'){Outcome $id 'Échec' $code 'Une autre installation Windows est en cours. Attendez sa fin puis relancez cette application.'}
             elseif($hex -in @('8A150061','8A15002B')){if($removeOffice){Outcome $id 'Déjà absente' $code 'Aucun produit Office cible ne reste installe.'}else{Outcome $id 'Déjà présente / à jour' $code 'Application conservee.'}}
             else{Outcome $id 'Échec' $code "Code $hex. Voir les journaux de lʼapplication."}
         }catch{Outcome $id 'Échec' 1 $_.Exception.Message}
@@ -248,5 +241,5 @@ try{
     $state.message=$_.Exception.Message
     Add-Content -LiteralPath (Join-Path $run 'engine-error.log') -Value $_.Exception.ToString() -Encoding UTF8
 }finally{
-    $state.done=$true;$state.percent=-1;$state.phase='Terminé';Save-State
+    try{$state.done=$true;$state.percent=-1;$state.phase='Terminé';Save-State}finally{if($queueLock){$queueLock.ReleaseMutex();$queueLock.Dispose()}}
 }
