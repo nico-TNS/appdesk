@@ -1,6 +1,6 @@
 # Compatibility and reliability status
 
-AppDesk is currently an **unsigned preview**, not a universally certified installer. The executable targets x64 Windows with .NET Framework 4.8. WinGet is required for WinGet catalogue entries. Internet and the requested Windows elevation are required for real installation/removal operations. Windows application-control can block an unsigned executable or its extracted PowerShell engine; signing admission and runtime review remain pending.
+AppDesk 2.3 is published as a **stable, unsigned release**. Stable is the project's release designation, not universal compatibility certification. The executable targets x64 Windows with .NET Framework 4.8. WinGet is required for WinGet catalogue entries. Internet and the requested Windows elevation are required for real installation/removal operations. Windows application-control can block an unsigned executable or its extracted PowerShell engine; signing admission and runtime review remain pending.
 
 ## Evidence recorded on 23 October 2026
 
@@ -10,7 +10,7 @@ AppDesk is currently an **unsigned preview**, not a universally certified instal
 | Microsoft 365 Personal/Family removal | ODT exit 0; target suite ID disappeared | Does not cover every Office edition or damaged installation |
 | Standalone OneNote removal | ODT exit 0; no remaining product ID | Not a notebook backup or restore test |
 | Office LTSC 2024 Standard x64 installation | ODT exit 0; registry confirms Standard2024Volume, version 16.0.17932.21056 | Activation/licensing and application use were not validated |
-| FortiClient VPN full package | Real download; valid Fortinet signature; advertised/embedded version 7.4.3.6002 match | Actual VPN installation, connection and upgrade remain untested |
+| FortiClient VPN fresh installation through AppDesk 2.3 | Automatic full-package download; valid Fortinet signatures; exit 0; installed version 7.4.3.6002; service running; MSI UILevel=2; no installer wizard observed; final report automatically displayed with 1 success/0 failures in 1m14s | User accepted UAC; VPN connection and upgrade were not tested |
 | Office Deployment Tool source | Real Microsoft download and valid publisher signature; also used by the successful Office operations | Publisher page format and availability can change |
 | Six Office configuration choices | Offline plans, update-channel consistency and conflict tests | Only LTSC Standard was installed in the recorded real test |
 | Seven WinGet entries | Silent plans, simulation and previous already-installed outcomes | Fresh installation/upgrade of every entry is not established |
@@ -30,4 +30,4 @@ AppDesk is currently an **unsigned preview**, not a universally certified instal
 
 ## Checks before broad deployment
 
-Run real installs, upgrades and removals on clean Windows 10/11 x64 machines, including existing Office 32-bit, consumer/volume editions, OneNote, offline/proxy networks and reboot-required outcomes. Validate FortiClient against the actual VPN gateway and organisational release policy. Record activation and application-launch results. Complete the runtime security review and trusted signing process. Until then, retain the preview designation and the limits above.
+Run real installs, upgrades and removals on clean Windows 10/11 x64 machines, including existing Office 32-bit, consumer/volume editions, OneNote, offline/proxy networks and reboot-required outcomes. Validate FortiClient against the actual VPN gateway and organisational release policy. Record activation and application-launch results. Complete the runtime security review and trusted signing process. The stable release retains these documented validation limits and does not imply trusted signing.

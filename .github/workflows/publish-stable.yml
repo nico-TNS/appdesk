@@ -1,0 +1,51 @@
+name: Publish stable 2.3
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-stable.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout release documentation and tested source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check source identity and automated tests
+        run: |
+          if ((Get-Content VERSION -Raw).Trim() -ne '2.3.0.0') { throw 'Unexpected stable version.' }
+          git diff --exit-code 087a54cf3a5651155a7c14c038d2a528b3785bf5 HEAD -- src scripts VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Source differs from tested binary.' }
+          .\scripts\Test-Project.ps1
+          .\scripts\Test-Engine.ps1
+          .\scripts\Test-Sources.ps1
+          .\scripts\Test-OfficeRemoval.ps1
+          .\scripts\Test-Reliability.ps1
+          .\scripts\Build.ps1
+          .\scripts\Test-Reports.ps1
+          .\scripts\Test-WorkerDiagnostics.ps1
+      - name: Promote exact tested executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          New-Item -ItemType Directory -Path stable-assets | Out-Null
+          gh release download v2.3.0-preview.1 --pattern MonInstallateur.exe --dir stable-assets
+          if ($LASTEXITCODE -ne 0) { throw 'Tested asset download failed.' }
+          $expected = 'd4cc19a4a6ea35df1567ed9490ad5c933e860152bcaaa58bd678c549b2aec38d'
+          $actual = (Get-FileHash stable-assets/MonInstallateur.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Tested executable hash mismatch.' }
+          ($expected + '  MonInstallateur.exe') | Set-Content stable-assets/SHA256SUMS.txt -Encoding ascii
+          Copy-Item docs/releases/v2.3.0.md stable-assets/TEST-RESULTS.md
+          gh release create v2.3.0 stable-assets/MonInstallateur.exe stable-assets/SHA256SUMS.txt stable-assets/TEST-RESULTS.md --target $env:GITHUB_SHA --latest --title "AppDesk 2.3.0" --notes-file docs/releases/v2.3.0.md
+          if ($LASTEXITCODE -ne 0) { throw 'Stable release publication failed.' }
