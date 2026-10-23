@@ -14,6 +14,10 @@ Expect-Failure {Assert-DownloadUri 'https://download.microsoft.com.attacker.exam
 Expect-Failure {Assert-DownloadUri 'https://user@download.microsoft.com/a.exe' @('download.microsoft.com')}
 Expect-Failure {Assert-DownloadUri 'https://download.microsoft.com:444/a.exe' @('download.microsoft.com')}
 Expect-Failure {Test-FortiDownload $PSCommandPath ([version]'7.4.3.6002')}
+$remove=[xml](Get-OfficeRemovalXml @('O365HomePremRetail','ProPlus2024Volume'))
+if($remove.Configuration.Remove.All -ne 'FALSE' -or $remove.Configuration.Remove.Product.Count -ne 2 -or $remove.Configuration.Add -or $remove.Configuration.RemoveMSI -or $remove.Configuration.Property.Value -ne 'FALSE'){throw 'Office removal scope broadened.'}
+foreach($id in @('OneNoteFreeRetail','VisioPro2024Volume','ProjectPro2024Volume','O365HomePremRetail"/><Remove All="TRUE"/>','')){Expect-Failure {Get-OfficeRemovalXml @($id)}}
+Expect-Failure {Get-OfficeRemovalXml @('O365HomePremRetail','O365HomePremRetail')}
 if($Online){
     $office=Get-OfficeSource;$forti=Get-FortiSource
     if($FortiPackage){Test-FortiDownload $FortiPackage $forti.Version}

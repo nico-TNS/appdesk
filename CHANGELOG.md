@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.2.0-preview.1 — targeted Office removal (file version 2.2.0.0)
+
+- Separate Office removal action with installed-product detection and a No-default confirmation.
+- Use the latest signed Microsoft ODT and remove only confirmed suite product IDs.
+- Exclude standalone OneNote, Visio, Project, MSI and Store installations from automated removal.
+- Block removal while Office apps run; add an explicit removal result to the integrated report.
+- Add negative removal-plan and report tests; no actual Office removal was used for testing.
+
 ## v2.1.0-preview.1 — automatic sources and integrated report (file version 2.1.0.0)
 
 - Resolve the current Office Deployment Tool from Microsoft, without reusing old local tools.

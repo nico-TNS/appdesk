@@ -21,4 +21,8 @@ if($report -notmatch 'Parcours interrompu' -or $report -notmatch 'Erreur fatale 
 $state.done=$false;$state.fatal=$false;$state.message='';$state.reboot=$false
 $report=Open-TestReport
 if($report -notmatch 'Résultats partiels' -or $report -notmatch '4 non traitée'){throw 'Partial report is incomplete.'}
+$job.Ids=@('Microsoft.Office');$job.Action='RemoveOffice';$job|ConvertTo-Json|Set-Content (Join-Path $folder 'job.json') -Encoding UTF8
+$state.done=$true;$state.completed=1;$state.total=1;$state.outcomes=@(@{id='Microsoft.Office';status='Désinstallée';code=0;detail='Suppression simulée pour tester le rapport.'})
+$report=Open-TestReport
+if($report -notmatch 'Désinstallation Office terminée' -or $report -notmatch 'Désinstallée'){throw 'Removal report incorrectly presented as an installation.'}
 [pscustomobject]@{MixedOutcomes='OK';StopAndReboot='OK';FatalError='OK';PartialResults='OK';ReportRendering='OK';ApplicationsInstalled=0;TestDirectory=$folder}|ConvertTo-Json

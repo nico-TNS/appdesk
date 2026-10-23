@@ -16,6 +16,8 @@ Session files and package paths are local to the interactive user. The current d
 
 ## Release controls
 
+Office removal is a distinct, destructive action requiring an explicit No-default UI confirmation and a separate elevated queue. It uses targeted ODT product IDs, not `Remove All=TRUE` or `RemoveMSI`. Suite IDs are allowlisted and checked against installed products again. Standalone OneNote, Visio and Project are excluded. Open Office processes block removal rather than being killed. Real uninstallation has not been tested on the development PC; plan and simulation coverage does not prove production compatibility.
+
 Only the repository-built AppDesk artifact is eligible for signing. Do not submit third-party installers or manually replaced binaries. Treat signing tokens, production environments, release approvals and action updates as sensitive. Use MFA and revoke exposed tokens. Signed artifacts must be checked after download; no signature is presently supplied with this preparation.
 
 Known functional limits, including the full-package requirement for FortiClient, are documented on the README. Tests so far cover compilation, plans, simulation and UI design; they do not establish end-to-end installation safety or compatibility.

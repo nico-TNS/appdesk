@@ -9,6 +9,12 @@ $channels=@{O365BusinessRetail='Current';O365ProPlusRetail='Current';HomeBusines
 if(!$job.Ids.Count -or @($job.Ids|Select-Object -Unique).Count -ne $job.Ids.Count){throw 'Selection vide ou doublons.'}
 foreach($id in $job.Ids){if($id -notin $allowed){throw 'Application non autorisee dans ce catalogue.'}}
 if(!$channels.ContainsKey([string]$job.Office)){throw 'Edition Office non reconnue.'}
+$removeOffice=$job.Action -eq 'RemoveOffice'
+if($job.Action -and $job.Action -notin @('Install','RemoveOffice')){throw 'Action non autorisee.'}
+if($removeOffice){
+    if($job.Ids.Count -ne 1 -or $job.Ids[0] -ne 'Microsoft.Office' -or !$job.RemovalConfirmed){throw 'La desinstallation Office exige une action distincte et sa confirmation.'}
+    $removalXml=Get-OfficeRemovalXml @($job.OfficeProducts)
+}
 
 function Office-Xml {
 @"
@@ -30,7 +36,7 @@ function Winget-Arguments($id){
 }
 if($Plan){
     $operations=@(foreach($id in $job.Ids){
-        if($id -eq 'Microsoft.Office'){@{id=$id;xml=(Office-Xml);source='Microsoft Download Center';latest=$true;arguments=@('/configure','office.xml');silent=$true}}
+        if($id -eq 'Microsoft.Office'){@{id=$id;action=if($removeOffice){'RemoveOffice'}else{'Install'};xml=if($removeOffice){$removalXml}else{Office-Xml};source='Microsoft Download Center';latest=$true;arguments=@('/configure','office.xml');silent=$true}}
         elseif($id -eq 'Fortinet.VPN'){@{id=$id;source=if($job.Forti){'Manual override'}else{'Fortinet official regional portal'};automatic=![bool]$job.Forti;arguments=@('/quiet','/norestart','/log','forticlient.log');silent=$true}}
         else{@{id=$id;arguments=@(Winget-Arguments $id);silent=$true}}
     })
@@ -150,6 +156,34 @@ function Install-Forti {
     if($code -in @(0,3010) -and !(Installed-Forti)){throw 'Le package sʼest termine mais FortiClient VPN nʼa pas ete detecte.'}
     return $code
 }
+function Get-OfficeSetup {
+    $setup=Join-Path $run 'office-setup.exe'
+    Report 'Recherche de version' 'Recherche du dernier Office Deployment Tool chez Microsoft…'
+    $info=Get-OfficeSource
+    $odt=Join-Path $run 'OfficeDeploymentTool.exe'
+    Download $info.Url $odt @('download.microsoft.com')
+    Report 'Vérification' 'Vérification de lʼoutil officiel Microsoft…'
+    Verify-Signer $odt 'O=Microsoft Corporation'
+    Record-Source $info $odt
+    $code=Run-Hidden $odt @('/quiet',('/extract:"'+$run+'"')) 'office-extract'
+    if($code -ne 0){throw "Extraction Office : code $code."}
+    Copy-Item -LiteralPath (Join-Path $run 'setup.exe') -Destination $setup
+    Verify-Signer $setup 'O=Microsoft Corporation'
+    return $setup
+}
+function Remove-Office {
+    $installed=@(Get-InstalledOfficeSuiteIds)
+    if(!@($job.OfficeProducts|Where-Object {$_ -in $installed}).Count){return -1978335135}
+    if(@($job.OfficeProducts|Where-Object {$_ -notin $installed}).Count){throw 'Les produits Office ont change depuis la confirmation. Recommencez la detection.'}
+    if(Get-Process -Name WINWORD,EXCEL,POWERPNT,OUTLOOK,MSACCESS,MSPUB,ONENOTE,VISIO,WINPROJ -ErrorAction SilentlyContinue){throw 'Fermez les applications Office et enregistrez vos documents avant la desinstallation. Aucun processus ne sera ferme automatiquement.'}
+    $setup=Get-OfficeSetup
+    $xml=Join-Path $run 'office-remove.xml'
+    [IO.File]::WriteAllText($xml,(Get-OfficeRemovalXml @($job.OfficeProducts)),(New-Object Text.UTF8Encoding($false)))
+    Report 'Désinstallation' 'Suppression des seuls produits Office confirmés, via Microsoft…'
+    $code=Run-Hidden $setup @('/configure',('"'+$xml+'"')) 'office-remove'
+    if($code -eq 0 -and @((Get-InstalledOfficeSuiteIds)|Where-Object {$_ -in $job.OfficeProducts}).Count){throw 'Microsoft a termine mais les produits Office sont encore detectes. Consultez les journaux.'}
+    return $code
+}
 function Install-Office {
     foreach($key in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
         $existing=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
@@ -160,18 +194,7 @@ function Install-Office {
             }else{throw 'Une autre edition Office est deja presente. Aucune desinstallation automatique nʼa ete effectuee.'}
         }
     }
-    $setup=Join-Path $run 'office-setup.exe'
-    Report 'Recherche de version' 'Recherche du dernier Office Deployment Tool chez Microsoft…'
-    $info=Get-OfficeSource
-        $odt=Join-Path $run 'OfficeDeploymentTool.exe'
-        Download $info.Url $odt @('download.microsoft.com')
-        Report 'Vérification' 'Vérification de lʼoutil officiel Microsoft…'
-        Verify-Signer $odt 'O=Microsoft Corporation'
-        Record-Source $info $odt
-        $code=Run-Hidden $odt @('/quiet',('/extract:"'+$run+'"')) 'office-extract'
-        if($code -ne 0){throw "Extraction Office : code $code."}
-        Copy-Item -LiteralPath (Join-Path $run 'setup.exe') -Destination $setup
-        Verify-Signer $setup 'O=Microsoft Corporation'
+    $setup=Get-OfficeSetup
     $xml=Join-Path $run 'office.xml';[IO.File]::WriteAllText($xml,(Office-Xml),(New-Object Text.UTF8Encoding($false)))
     Report 'Installation' 'Téléchargement et installation Office en arrière-plan. Cette étape peut être longue.'
     $code=Run-Hidden $setup @('/configure',('"'+$xml+'"')) 'office'
@@ -197,7 +220,7 @@ try{
                 $code=0
             }
             elseif($id -eq 'Fortinet.VPN'){$code=Install-Forti}
-            elseif($id -eq 'Microsoft.Office'){$code=Install-Office}
+            elseif($id -eq 'Microsoft.Office'){if($removeOffice){$code=Remove-Office}else{$code=Install-Office}}
             else{
                 if(!$job.Winget -or !(Test-Path -LiteralPath $job.Winget)){throw 'WinGet est introuvable.'}
                 if(!$wingetRefreshed){
@@ -210,9 +233,9 @@ try{
                 $code=Run-Hidden $job.Winget (Winget-Arguments $id) $id $true
             }
             $hex='{0:X8}' -f ([long]$code -band 0xFFFFFFFFL)
-            if($code -eq 0){Outcome $id 'Installée' $code 'Operation terminee avec succes.'}
+            if($code -eq 0){if($removeOffice){Outcome $id 'Désinstallée' $code ('Produits retires : '+($job.OfficeProducts -join ', ')+'. Aucune reinstallation automatique.')}else{Outcome $id 'Installée' $code 'Operation terminee avec succes.'}}
             elseif($code -eq 3010){$state.reboot=$true;Outcome $id 'Redémarrage requis' $code 'Aucun redemarrage automatique.'}
-            elseif($hex -in @('8A150061','8A15002B')){Outcome $id 'Déjà présente / à jour' $code 'Application conservee.'}
+            elseif($hex -in @('8A150061','8A15002B')){if($removeOffice){Outcome $id 'Déjà absente' $code 'Aucun produit Office cible ne reste installe.'}else{Outcome $id 'Déjà présente / à jour' $code 'Application conservee.'}}
             else{Outcome $id 'Échec' $code "Code $hex. Voir les journaux de lʼapplication."}
         }catch{Outcome $id 'Échec' 1 $_.Exception.Message}
     }

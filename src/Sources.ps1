@@ -1,6 +1,20 @@
 ﻿# Only publisher-owned pages supply download URLs. No downloaded code/catalog is evaluated.
 $script:OfficePage='https://www.microsoft.com/en-us/download/details.aspx?id=49117'
 $script:FortiPage='https://support.fortinet.com.cn/vpn/forticlient_vpn/fct_download'
+$script:OfficeSuitePattern='^(?:O365[A-Za-z0-9]*Retail|(?:HomeBusiness|HomeStudent|Professional|ProPlus|Standard|Personal)(?:20(?:16|19|21|24))?(?:Retail|Volume))$'
+function Test-OfficeSuiteId([string]$Id){return $Id -match $script:OfficeSuitePattern}
+function Get-OfficeRemovalXml([string[]]$Products){
+    if(!$Products.Count -or @($Products|Select-Object -Unique).Count -ne $Products.Count){throw 'Liste de produits Office vide ou dupliquee.'}
+    foreach($product in $Products){if(!(Test-OfficeSuiteId $product)){throw 'Produit Office non autorise pour la desinstallation ciblee.'}}
+    $items=($Products|ForEach-Object {'<Product ID="'+$_+'" />'}) -join ''
+    return '<Configuration><Remove All="FALSE">'+$items+'</Remove><Display Level="None" AcceptEULA="TRUE" /><Property Name="FORCEAPPSHUTDOWN" Value="FALSE" /></Configuration>'
+}
+function Get-InstalledOfficeSuiteIds {
+    @(foreach($root in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
+        $config=Get-ItemProperty -LiteralPath $root -ErrorAction SilentlyContinue
+        if($config.ProductReleaseIds){[string]$config.ProductReleaseIds -split ','|Where-Object {Test-OfficeSuiteId $_}}
+    })|Sort-Object -Unique
+}
 function Assert-DownloadUri([string]$Url,[string[]]$Hosts){
     $uri=$null
     if(![Uri]::TryCreate($Url,[UriKind]::Absolute,[ref]$uri) -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or !$uri.IsDefaultPort -or $uri.Host -notin $Hosts){throw 'Adresse de telechargement non autorisee.'}

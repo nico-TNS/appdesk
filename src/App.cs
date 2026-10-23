@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.1.0.0")]
-[assembly: AssemblyInformationalVersion("2.1.0.0")]
-[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyFileVersion("2.2.0.0")]
+[assembly: AssemblyInformationalVersion("2.2.0.0")]
+[assembly: AssemblyVersion("2.2.0.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -40,6 +41,7 @@ public sealed class AppItem : INotifyPropertyChanged {
 public sealed class Job {
  public string[] Ids {get;set;} public bool Update {get;set;} public string Office {get;set;}
  public string Forti {get;set;} public string Winget {get;set;} public bool Simulate {get;set;}
+ public string Action {get;set;} public string[] OfficeProducts {get;set;} public bool RemovalConfirmed {get;set;}
 }
 public sealed class Outcome {public string id{get;set;} public string status{get;set;} public string detail{get;set;} public int code{get;set;}}
 public sealed class ReportRow {public string Title{get;set;} public string Status{get;set;} public string Detail{get;set;} public string Code{get;set;} public string Color{get;set;}}
@@ -106,7 +108,7 @@ public sealed class InstallerUi {
  ItemsControl cards;TextBox search;ComboBox edition;CheckBox updates,consent;
  Button install,stop;TextBlock title,completed,activity,fortiHint;ProgressBar overall,activityBar;
  readonly string[] products={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume"};
- string category="",forti="",runPath="",settingsRoot;bool running,simulating;
+ string category="",forti="",runPath="",settingsRoot;bool running,simulating,removingOffice;
  Process worker;DispatcherTimer timer;DateTime startTime;State lastState;
  AppItem[] queuedApps;List<ReportRow> reportRows;string reportText="";DateTime? reportEndedAt;
  readonly string[] args;
@@ -128,6 +130,7 @@ public sealed class InstallerUi {
   consent.Checked+=(s,e)=>UpdateSelection();consent.Unchecked+=(s,e)=>UpdateSelection();
   Find<Button>("ChooseForti").Click+=(s,e)=>ChooseForti();
   Find<Button>("AutoForti").Click+=(s,e)=>{forti="";DetectForti();};
+  Find<Button>("UninstallOffice").Click+=(s,e)=>StartOfficeRemoval();
   Find<Button>("BackToApps").Click+=(s,e)=>ShowReport(false);
   Find<Button>("ShowReport").Click+=(s,e)=>ShowReport(true);
   Find<Button>("ExportReport").Click+=(s,e)=>{var d=new SaveFileDialog{Title="Exporter le rapport",Filter="Rapport texte (*.txt)|*.txt",FileName="AppDesk-rapport-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".txt"};if(d.ShowDialog(Window)==true)try{File.WriteAllText(d.FileName,reportText,new UTF8Encoding(true));}catch(Exception ex){MessageBox.Show(Window,"Export impossible : "+ex.Message,"Rapport AppDesk");}};
@@ -166,7 +169,7 @@ public sealed class InstallerUi {
  }
  void Enable(bool enabled){
   cards.IsEnabled=enabled;search.IsEnabled=enabled;updates.IsEnabled=enabled;consent.IsEnabled=enabled;
-  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","AutoForti","NavAll","NavWeb","NavVpn","NavWork","ShowReport"})Find<Button>(name).IsEnabled=enabled;
+  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","AutoForti","UninstallOffice","NavAll","NavWeb","NavVpn","NavWork","ShowReport"})Find<Button>(name).IsEnabled=enabled;
   stop.Visibility=enabled?Visibility.Collapsed:Visibility.Visible;stop.IsEnabled=true;UpdateSelection();
   install.Content=enabled?"Installer la sélection  →":"En cours…";
  }
@@ -179,17 +182,46 @@ public sealed class InstallerUi {
  void Start(bool demo){
   var selected=apps.Where(a=>a.Selected).ToArray();if(selected.Length==0||running)return;
   string winget=Winget();if(!demo&&selected.Any(a=>a.Kind=="winget")&&winget==""){MessageBox.Show(Window,"Installez « Programme d’installation d’application » de Microsoft pour disposer de WinGet.","WinGet requis");return;}
+  var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo,Action="Install"};
+  StartJob(job,selected,demo);
+ }
+ string[] InstalledOfficeSuites(){
+  var found=new List<string>();
+  foreach(var view in new[]{RegistryView.Registry64,RegistryView.Registry32})using(var hive=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))using(var key=hive.OpenSubKey(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration")){
+   if(key!=null)foreach(var id in Convert.ToString(key.GetValue("ProductReleaseIds","")).Split(','))if(Regex.IsMatch(id,@"^(?:O365[A-Za-z0-9]*Retail|(?:HomeBusiness|HomeStudent|Professional|ProPlus|Standard|Personal)(?:20(?:16|19|21|24))?(?:Retail|Volume))$"))found.Add(id);
+  }
+  return found.Distinct().OrderBy(x=>x).ToArray();
+ }
+ string OfficeProductName(string id){
+  if(id=="O365HomePremRetail")return "Microsoft 365 Personnel / Famille";
+  if(id.StartsWith("O365Business"))return "Microsoft 365 Apps — Business";
+  if(id.StartsWith("O365ProPlus"))return "Microsoft 365 Apps — Enterprise";
+  var names=new[]{"Microsoft 365 Apps — Business","Microsoft 365 Apps — Enterprise","Office 2024 — Famille et Petite Entreprise","Office 2024 — Professionnel","Office LTSC 2024 — Standard","Office LTSC 2024 — Professionnel Plus"};
+  int index=Array.IndexOf(products,id);return index>=0?names[index]:"Microsoft Office ("+id+")";
+ }
+ void StartOfficeRemoval(){
+  if(running)return;
+  string[] targets;
+  try{targets=InstalledOfficeSuites();}catch(Exception ex){MessageBox.Show(Window,"Détection Office impossible : "+ex.Message,"Désinstaller Office");return;}
+  if(targets.Length==0){MessageBox.Show(Window,"Aucune suite Office Click-to-Run compatible n’a été détectée. Les anciennes installations MSI et les versions Microsoft Store doivent être supprimées depuis les applications installées de Windows.","Désinstaller Office",MessageBoxButton.OK,MessageBoxImage.Information);return;}
+  string list=string.Join("\n",targets.Select(id=>"• "+OfficeProductName(id)).ToArray());
+  string message="Les produits suivants seront désinstallés :\n\n"+list+"\n\nFermez Word, Excel, Outlook et les autres applications Office après avoir enregistré vos documents. Aucun programme ouvert ne sera fermé automatiquement.\n\nOneNote autonome, Visio et Project ne sont pas ciblés. Cette action ne supprime pas vos documents personnels et ne résilie pas votre abonnement. Une licence sera nécessaire pour réinstaller Office.\n\nConfirmer la désinstallation de cette sélection ?";
+  if(MessageBox.Show(Window,message,"Confirmer la désinstallation Office",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
+  var job=new Job{Ids=new[]{"Microsoft.Office"},Office=products[edition.SelectedIndex],Action="RemoveOffice",OfficeProducts=targets,RemovalConfirmed=true,Simulate=false};
+  StartJob(job,new[]{apps.First(a=>a.Id=="Microsoft.Office")},false);
+ }
+ void StartJob(Job job,AppItem[] selected,bool demo){
   try{
+   removingOffice=job.Action=="RemoveOffice";
    queuedApps=selected;reportEndedAt=null;ShowReport(false);Find<Button>("ShowReport").Visibility=Visibility.Collapsed;
    runPath=Path.Combine(settingsRoot,"Sessions",DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(runPath);
-   var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo};
    string path=Path.Combine(runPath,"job.json");File.WriteAllText(path,Entry.Json.Serialize(job),new UTF8Encoding(false));
-   foreach(var app in apps)app.Status=app.Selected?"Dans la file":"";
+   foreach(var app in apps)app.Status=selected.Any(a=>a.Id==app.Id)?"Dans la file":"";
    var start=new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--worker "+Entry.Quote(path));
    start.UseShellExecute=!demo;start.CreateNoWindow=true;start.WindowStyle=ProcessWindowStyle.Hidden;if(!demo)start.Verb="runas";
    worker=Process.Start(start);running=true;simulating=demo;lastState=null;startTime=DateTime.Now;
    Enable(false);overall.Value=0;title.Text=demo?"Démonstration — aucune installation":"Préparation de votre sélection…";activity.Text="Vérification des prérequis et démarrage du moteur.";timer.Start();
-  }catch(Win32Exception ex){activity.Text=ex.NativeErrorCode==1223?"Autorisation Windows annulée. Rien n’a été installé.":ex.Message;}
+  }catch(Win32Exception ex){activity.Text=ex.NativeErrorCode==1223?"Autorisation Windows annulée. Aucune opération n’a démarré.":ex.Message;}
   catch(Exception ex){activity.Text=ex.Message;}
  }
  void Poll(){
@@ -203,7 +235,7 @@ public sealed class InstallerUi {
   overall.Value=state.total>0?100.0*state.completed/state.total:0;
   completed.Text=state.completed+" / "+state.total+" terminée(s)";
   var current=apps.FirstOrDefault(a=>a.Id==state.current);
-  title.Text=simulating?"Démonstration — aucune installation":current!=null?current.Title:"Traitement de la sélection";
+  title.Text=simulating?"Démonstration — aucune installation":removingOffice?"Microsoft Office — désinstallation":current!=null?current.Title:"Traitement de la sélection";
   activity.Text=state.message;
   activityBar.Visibility=state.done?Visibility.Collapsed:Visibility.Visible;
   activityBar.IsIndeterminate=state.percent<0;if(state.percent>=0)activityBar.Value=state.percent;
@@ -235,10 +267,10 @@ public sealed class InstallerUi {
    var result=results.FirstOrDefault(x=>x.id==app.Id);
    string status=result==null?"Non traitée":result.status;
    string detail=result==null?(state!=null&&state.stopped?"File arrêtée avant cette application.":state!=null&&state.fatal?state.message:"Le moteur n’a pas fourni de résultat pour cette application."):result.detail;
-   reportRows.Add(new ReportRow{Title=app.Title,Status=status,Detail=detail,Code=result==null?"":("Code "+result.code+" · 0x"+unchecked((uint)result.code).ToString("X8")),Color=result==null?"#7C8BA3":status=="Échec"?"#C13C4B":result.code==3010?"#9A6A15":"#237E63"});
+   reportRows.Add(new ReportRow{Title=removingOffice&&app.Id=="Microsoft.Office"?"Microsoft Office — désinstallation":app.Title,Status=status,Detail=detail,Code=result==null?"":("Code "+result.code+" · 0x"+unchecked((uint)result.code).ToString("X8")),Color=result==null?"#7C8BA3":status=="Échec"?"#C13C4B":result.code==3010?"#9A6A15":"#237E63"});
   }
   int failed=results.Count(x=>x.status=="Échec"),installed=results.Count(x=>x.code==0||x.code==3010),kept=results.Count-failed-installed,missing=reportRows.Count-results.Count;
-  Find<TextBlock>("ReportTitle").Text=simulating?"Bilan de démonstration":state==null||!state.done||state.fatal||(!state.stopped&&state.completed<state.total)?"Parcours interrompu":state.stopped?"Bilan après arrêt":failed>0?"Installation terminée avec des erreurs":"Votre sélection est prête.";
+  Find<TextBlock>("ReportTitle").Text=simulating?"Bilan de démonstration":state==null||!state.done||state.fatal||(!state.stopped&&state.completed<state.total)?"Parcours interrompu":state.stopped?"Bilan après arrêt":failed>0?(removingOffice?"Désinstallation terminée avec des erreurs":"Installation terminée avec des erreurs"):removingOffice?"Désinstallation Office terminée":"Votre sélection est prête.";
   Find<TextBlock>("ReportSummary").Text=installed+" réussie(s) · "+kept+" conservée(s) · "+failed+" échec(s) · "+Math.Max(0,missing)+" non traitée(s)";
   DateTime ended=reportEndedAt??DateTime.Now;
   Find<TextBlock>("ReportContext").Text=(simulating?"Simulation : aucune application installée. · ":"")+ended.ToString("dd/MM/yyyy HH:mm")+" · Durée : "+(ended-startTime).ToString(@"hh\:mm\:ss")+(state!=null&&state.reboot?" · Redémarrage requis, non lancé.":"");
@@ -254,7 +286,7 @@ public sealed class InstallerUi {
  void OnLoaded(){
   string session=ArgumentValue("--report-session");
   if(session!=null){
-   runPath=Path.GetFullPath(session);var job=Entry.Json.Deserialize<Job>(File.ReadAllText(Path.Combine(runPath,"job.json")));
+   runPath=Path.GetFullPath(session);var job=Entry.Json.Deserialize<Job>(File.ReadAllText(Path.Combine(runPath,"job.json")));removingOffice=job.Action=="RemoveOffice";
    queuedApps=apps.Where(a=>job.Ids.Contains(a.Id)).ToArray();startTime=Directory.GetCreationTime(runPath);reportEndedAt=File.GetLastWriteTime(Path.Combine(runPath,"state.json"));simulating=job.Simulate;
    var state=Entry.Json.Deserialize<State>(File.ReadAllText(Path.Combine(runPath,"state.json")));BuildReport(state);ShowReport(true);Find<Button>("ShowReport").Visibility=Visibility.Visible;
   }
