@@ -12,6 +12,7 @@ function Call($name){$ui.GetType().GetMethod($name,$flags).Invoke($ui,@())}
 function Control($name){$ui.Window.FindName($name)}
 Set-Field 'settingsRoot' $folder
 $apps=(Field 'apps').GetValue($ui)
+if((Control 'OfficeEdition').Items.Count -ne 11){throw 'Office catalogue should contain eleven editions.'}
 $apps[0].Selected=$true;$apps[8].Selected=$true
 (Control 'OfficeEdition').SelectedIndex=4;(Control 'UpdateExisting').IsChecked=$false
 (Control 'Consent').IsChecked=$true
@@ -49,5 +50,17 @@ if((Control 'OfficeEdition').SelectedIndex -ne 4 -or (Control 'OfficeEdition').I
 if($apps[8].AvailableText -notmatch '17932.21056'){throw 'Office displayed Current channel version for LTSC.'}
 $office.OfficeChannel='MonthlyEnterprise';Call 'SelectPresent'
 if($apps[8].Selected){throw 'Unsupported Office channel was silently migrated.'}
+$office.OfficeProduct='Standard2021Volume';$office.OfficeChannel='PerpetualVL2021';$office.InstalledVersion='16.0.14334.20974'
+$vl2021=New-Object OfficeVersion;$vl2021.Channel='PerpetualVL2021';$vl2021.Version='16.0.14334.20974';$inv.OfficeVersions+=$vl2021
+Call 'SelectPresent'
+if(!$apps[8].Selected -or [Entry]::OfficeProducts[(Control 'OfficeEdition').SelectedIndex] -ne 'Standard2021Volume' -or $apps[8].AvailableText -notmatch '14334.20974'){throw 'LTSC 2021 selection/display migrated to a different channel.'}
+if((Control 'OfficeSupport').Visibility -ne 'Visible'){throw 'Office 2021 end-of-support note missing.'}
+Call 'SaveSelection'
+foreach($id in [Entry]::OfficeProducts|Where-Object {$_ -match '2021'}){
+    $p=New-Object SelectionProfile;$p.Schema=1;$p.Ids=@('Microsoft.Office');$p.Office=$id
+    [void][SelectionTools]::Validate($p)
+}
+$office.OfficeProduct='Standard2024Volume';$office.OfficeChannel='PerpetualVL2024';Call 'SelectPresent'
+if((Control 'OfficeSupport').Visibility -ne 'Collapsed'){throw 'Office 2021 support note leaked to 2024.'}
 $ui.Window.Close()
 [pscustomobject]@{ProfileRoundTrip='OK';UntrustedProfile='OK';RetryOnlyFailures='OK';UpdateOnlySelection='OK';OfficeChannel='OK';ConsentReset='OK';ApplicationsInstalled=0}|ConvertTo-Json

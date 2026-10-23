@@ -20,17 +20,25 @@ if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments -contains '-
 $job.UpdateOnly=$true;Write-Job;$plan=Invoke-Plan
 if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments[0] -ne 'upgrade'){throw 'Update-only would install absent applications.'}
 $job.UpdateOnly=$false;Write-Job
-foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024Retail','Professional2024Retail','Standard2024Volume','ProPlus2024Volume')){
+foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024Retail','Professional2024Retail','Standard2024Volume','ProPlus2024Volume','HomeStudent2021Retail','HomeBusiness2021Retail','Professional2021Retail','Standard2021Volume','ProPlus2021Volume')){
     $job.Office=$product;Write-Job;$plan=Invoke-Plan
     $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
     if($xml.Configuration.Display.Level -ne 'None' -or $xml.Configuration.Add.Product.ID -ne $product -or $xml.Configuration.RemoveMSI){throw 'Configuration Office incorrecte.'}
     if($xml.Configuration.Add.Version -or $xml.Configuration.Add.SourcePath -or $xml.Configuration.Updates.Enabled -ne 'TRUE'){throw 'Office is pinned to an old build or local cache.'}
     if($xml.Configuration.Add.Channel -ne $xml.Configuration.Updates.Channel){throw 'Office update channel differs from the installation channel.'}
+    if($product -like '*2021Volume' -and $xml.Configuration.Add.Channel -ne 'PerpetualVL2021'){throw 'Office LTSC 2021 uses the wrong channel.'}
+    if($product -like '*2021Retail' -and $xml.Configuration.Add.Channel -ne 'Current'){throw 'Office 2021 retail uses the wrong channel.'}
 }
 $job.Office='Standard2024Volume';$job.ReplaceStandaloneOneNoteConfirmed=$true;Write-Job;$plan=Invoke-Plan
 $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
 if($xml.Configuration.Remove.All -ne 'FALSE' -or $xml.Configuration.Remove.Product.ID -ne 'OneNoteFreeRetail' -or $xml.Configuration.Add.Product.ID -ne 'Standard2024Volume' -or $xml.Configuration.RemoveMSI){throw 'Confirmed OneNote replacement is not narrowly scoped.'}
 $job.ReplaceStandaloneOneNoteConfirmed=$false;Write-Job
+foreach($product in @('Standard2021Volume','ProPlus2021Volume')){
+    $job.Office=$product;$job.ReplaceStandaloneOneNoteConfirmed=$true;Write-Job;$plan=Invoke-Plan
+    $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
+    if($xml.Configuration.Add.Channel -ne 'PerpetualVL2021' -or $xml.Configuration.Remove.Product.ID -ne 'OneNoteFreeRetail' -or $xml.Configuration.Remove.All -ne 'FALSE'){throw 'LTSC 2021 OneNote replacement is not targeted.'}
+}
+$job.ReplaceStandaloneOneNoteConfirmed=$false;$job.Office='Standard2024Volume';Write-Job
 & $engine -JobPath (Join-Path $temp 'job.json')
 $state=Get-Content -LiteralPath (Join-Path $temp 'state.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if(!$state.done -or $state.fatal -or $state.completed -ne 9){throw 'Simulation incomplete.'}
@@ -43,4 +51,4 @@ $job.Ids=@('Google.Chrome');$job.Simulate=$false;$job.Winget=Join-Path $temp 'no
 & $engine -JobPath (Join-Path $temp 'job.json')
 $state=Get-Content -LiteralPath (Join-Path $temp 'state.json') -Raw -Encoding UTF8|ConvertFrom-Json
 if(!$state.done -or $state.outcomes[0].status -ne 'Échec'){throw 'Erreur de dependance non signalee.'}
-[pscustomobject]@{Catalogue=9;OfficeEditions=6;SilentPlans='OK';Simulation='9/9';Stop='OK';DependencyFailure='OK';ApplicationsInstalled=0;RunDirectory=$temp}|ConvertTo-Json
+[pscustomobject]@{Catalogue=9;OfficeEditions=11;SilentPlans='OK';Simulation='9/9';Stop='OK';DependencyFailure='OK';ApplicationsInstalled=0;RunDirectory=$temp}|ConvertTo-Json

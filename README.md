@@ -2,7 +2,7 @@
 
 Installateur Windows personnel, libre et portable, avec sélection d’applications, installation silencieuse et suivi de progression. Licence [MIT](LICENSE).
 
-**Version stable : [2.3.0](https://github.com/nico-TNS/appdesk/releases/tag/v2.3.0). Nouvelles fonctions : [2.4.0-preview.1](https://github.com/nico-TNS/appdesk/releases/tag/v2.4.0-preview.1), non signée. La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
+**Version stable : [2.3.0](https://github.com/nico-TNS/appdesk/releases/tag/v2.3.0). Nouvelles fonctions : [2.4.1-preview.1](https://github.com/nico-TNS/appdesk/releases/tag/v2.4.1-preview.1), non signée. La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
 
 ![Interface AppDesk, état de progression illustratif](docs/screenshot.png)
 
@@ -14,7 +14,7 @@ Installateur Windows personnel, libre et portable, avec sélection d’applicati
 
 - Chrome, Firefox, Opera, Acrobat Reader, WireGuard, OpenVPN Community, client Windows 3CX et Office.
 - FortiClient VPN téléchargé automatiquement depuis le portail officiel régional Fortinet, avec vérification de sa signature et de sa version. Package local facultatif.
-- Choix entre six éditions Office : Microsoft 365 Business/Enterprise, Office 2024 Famille et Petite Entreprise/Professionnel et LTSC 2024 Standard/Professionnel Plus.
+- Choix entre onze éditions Office : Microsoft 365 Business/Enterprise, Office 2024 Famille et Petite Entreprise/Professionnel et LTSC 2024 Standard/Professionnel Plus, ainsi que cinq éditions Office 2021 (Famille et Étudiant, Famille et Petite Entreprise, Professionnel, LTSC Standard et Professionnel Plus). Office 2021 est hors support Microsoft depuis le 13/10/2026.
 - Une fenêtre de suivi, progression globale par applications traitées et activité par application.
 - Mise à jour des applications sélectionnées activée par défaut, arrêt après l’application en cours, bilan final intégré et exportable.
 - Résolution en ligne du dernier outil Office et de la version disponible du canal choisi. Voir [la politique des sources](docs/SOURCES.md).

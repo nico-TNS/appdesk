@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.4.0.0")]
-[assembly: AssemblyInformationalVersion("2.4.0.0")]
-[assembly: AssemblyVersion("2.4.0.0")]
+[assembly: AssemblyFileVersion("2.4.1.0")]
+[assembly: AssemblyInformationalVersion("2.4.1.0")]
+[assembly: AssemblyVersion("2.4.1.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -56,7 +56,7 @@ public sealed class OfficeVersion {public string Channel{get;set;} public string
 public sealed class InventorySnapshot {public bool Complete{get;set;} public string CheckedAt{get;set;} public InventoryRow[] Rows{get;set;} public OfficeVersion[] OfficeVersions{get;set;}}
 public static class SelectionTools {
  public static SelectionProfile Validate(SelectionProfile p){
-  string[] products={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume"};
+  var products=Entry.OfficeProducts;
   var allowed=Entry.Catalog().Select(a=>a.Id).ToArray();
   if(p==null||p.Schema!=1||p.Ids==null||p.Ids.Length>9||p.Ids.Distinct().Count()!=p.Ids.Length||p.Ids.Any(id=>!allowed.Contains(id))||!products.Contains(p.Office))throw new InvalidDataException("Sélection enregistrée invalide ou incompatible.");
   return p;
@@ -76,6 +76,9 @@ public sealed class State {
  public List<Outcome> outcomes{get;set;}
 }
 public static class Entry {
+ public static readonly string[] OfficeProducts={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume","HomeStudent2021Retail","HomeBusiness2021Retail","Professional2021Retail","Standard2021Volume","ProPlus2021Volume"};
+ public static readonly string[] OfficeNames={"Microsoft 365 Apps — Business","Microsoft 365 Apps — Enterprise","Office 2024 — Famille et Petite Entreprise","Office 2024 — Professionnel","Office LTSC 2024 — Standard","Office LTSC 2024 — Professionnel Plus","Office 2021 — Famille et Étudiant","Office 2021 — Famille et Petite Entreprise","Office 2021 — Professionnel","Office LTSC 2021 — Standard","Office LTSC 2021 — Professionnel Plus"};
+ public static string OfficeChannel(string product){return product.EndsWith("2021Volume")?"PerpetualVL2021":product.EndsWith("2024Volume")?"PerpetualVL2024":"Current";}
  public static readonly JavaScriptSerializer Json=new JavaScriptSerializer();
  public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var r=new StreamReader(s,Encoding.UTF8))return r.ReadToEnd();}
  public static string Quote(string value){return "\""+value.Replace("\"","")+"\"";}
@@ -88,7 +91,7 @@ public static class Entry {
   Item("Fortinet.VPN","FortiClient VPN","VPN · téléchargement automatique","VPN","F","#D55149","fortinet"),
   Item("OpenVPNTechnologies.OpenVPN","OpenVPN","VPN · édition Community","VPN","O","#EB9339","winget"),
   Item("3CX.Softphone","3CX","Client téléphonique Windows","Bureautique","3","#4561BD","winget"),
-  Item("Microsoft.Office","Microsoft Office","Microsoft 365 · 2024 · LTSC","Bureautique","M","#D96B3D","office")
+  Item("Microsoft.Office","Microsoft Office","Microsoft 365 · 2024 · 2021 · LTSC","Bureautique","M","#D96B3D","office")
  };}
  static AppItem Item(string id,string title,string sub,string category,string glyph,string color,string kind){return new AppItem{Id=id,Title=title,Subtitle=sub,Category=category,Glyph=glyph,Color=color,Kind=kind};}
  [STAThread] public static int Main(string[] args){
@@ -148,7 +151,7 @@ public sealed class InstallerUi {
  ObservableCollection<AppItem> apps;ICollectionView view;
  ItemsControl cards;TextBox search;ComboBox edition;CheckBox updates,consent;
  Button install,stop;TextBlock title,completed,activity,fortiHint;ProgressBar overall,activityBar;
- readonly string[] products={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume"};
+ readonly string[] products=Entry.OfficeProducts;
  string category="",forti="",runPath="",settingsRoot;bool running,simulating,removingOffice;
  Process worker;DispatcherTimer timer;DateTime startTime;State lastState;
  AppItem[] queuedApps;List<ReportRow> reportRows;string reportText="";DateTime? reportEndedAt;
@@ -164,7 +167,7 @@ public sealed class InstallerUi {
   title=Find<TextBlock>("ProgressTitle");completed=Find<TextBlock>("Completed");activity=Find<TextBlock>("Activity");fortiHint=Find<TextBlock>("FortiHint");overall=Find<ProgressBar>("Overall");activityBar=Find<ProgressBar>("ActivityBar");
   apps=new ObservableCollection<AppItem>(Entry.Catalog());view=CollectionViewSource.GetDefaultView(apps);view.Filter=Filter;cards.ItemsSource=view;
   foreach(var app in apps)app.PropertyChanged+=(o,e)=>{if(e.PropertyName=="Selected")UpdateSelection();};
-  foreach(string label in new[]{"Microsoft 365 Apps — Business","Microsoft 365 Apps — Enterprise","Office 2024 — Famille et Petite Entreprise","Office 2024 — Professionnel","Office LTSC 2024 — Standard","Office LTSC 2024 — Professionnel Plus"})edition.Items.Add(label);
+  foreach(string label in Entry.OfficeNames)edition.Items.Add(label);
   edition.SelectedIndex=0;
   search.TextChanged+=(s,e)=>view.Refresh();
   Find<Button>("NavAll").Click+=(s,e)=>Navigate("");Find<Button>("NavWeb").Click+=(s,e)=>Navigate("Navigateurs");Find<Button>("NavVpn").Click+=(s,e)=>Navigate("VPN");Find<Button>("NavWork").Click+=(s,e)=>Navigate("Bureautique");
@@ -178,7 +181,7 @@ public sealed class InstallerUi {
   Find<Button>("SaveSelection").Click+=(s,e)=>SaveSelection();
   Find<Button>("LoadSelection").Click+=(s,e)=>LoadSelection(true);
   Find<Button>("RetryFailed").Click+=(s,e)=>RetryFailed();
-  edition.SelectionChanged+=(s,e)=>ApplyInventory();
+  edition.SelectionChanged+=(s,e)=>{ApplyInventory();UpdateOfficeSupport();};
   Find<Button>("UninstallOffice").Click+=(s,e)=>StartOfficeRemoval();
   Find<Button>("BackToApps").Click+=(s,e)=>ShowReport(false);
   Find<Button>("ShowReport").Click+=(s,e)=>ShowReport(true);
@@ -225,7 +228,7 @@ public sealed class InstallerUi {
   if(running)return;
   if(inventory==null||inventory.Rows==null){activity.Text="La détection des applications est encore en cours.";return;}
   var office=inventory.Rows.FirstOrDefault(r=>r.Id=="Microsoft.Office"&&r.Installed);
-  bool officeSupported=office!=null&&Array.IndexOf(products,office.OfficeProduct)>=0&&office.OfficeChannel== (office.OfficeProduct.EndsWith("Volume")?"PerpetualVL2024":"Current");
+  bool officeSupported=office!=null&&Array.IndexOf(products,office.OfficeProduct)>=0&&office.OfficeChannel==Entry.OfficeChannel(office.OfficeProduct);
   updateOnly=true;
   foreach(var a in apps)a.Selected=inventory.Rows.Any(r=>r.Id==a.Id&&r.Installed)&&(a.Kind!="office"||officeSupported);
   if(officeSupported)edition.SelectedIndex=Array.IndexOf(products,office.OfficeProduct);
@@ -266,7 +269,7 @@ public sealed class InstallerUi {
    a.InstalledText="Installée : "+(row.Installed?(string.IsNullOrEmpty(row.InstalledVersion)?"version inconnue":row.InstalledVersion):"absente");
    string available=row.AvailableVersion,source=row.Source,issue=row.Issue;
    if(a.Kind=="office"){
-    string channel=products[Math.Max(0,edition.SelectedIndex)].EndsWith("Volume")?"PerpetualVL2024":"Current";
+    string channel=Entry.OfficeChannel(products[Math.Max(0,edition.SelectedIndex)]);
     var v=inventory.OfficeVersions==null?null:inventory.OfficeVersions.FirstOrDefault(x=>x.Channel==channel);available=v==null?"":v.Version;source="Microsoft · "+channel;
     if(row.Installed)source+="\nProduit installé : "+row.OfficeProduct+" · "+row.OfficeChannel;
    }
@@ -275,6 +278,12 @@ public sealed class InstallerUi {
   }
  }
  bool Filter(object value){var app=(AppItem)value;return(category==""||app.Category==category)&&(app.Title.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0||app.Subtitle.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0);}
+ void UpdateOfficeSupport(){
+  var note=Find<TextBlock>("OfficeSupport");if(note==null)return;
+  bool legacy=edition.SelectedIndex>=0&&products[edition.SelectedIndex].Contains("2021");
+  note.Text=legacy?"Office 2021 : support Microsoft terminé le 13/10/2026 · licence 2021 requise.":"";
+  note.Visibility=legacy?Visibility.Visible:Visibility.Collapsed;
+ }
  void Navigate(string value){ShowReport(false);category=value;view.Refresh();}
  void UpdateSelection(){
   int count=apps.Count(a=>a.Selected);if(!running)completed.Text=count+" application"+(count>1?"s":"")+" sélectionnée"+(count>1?"s":"");
@@ -335,7 +344,7 @@ public sealed class InstallerUi {
   if(id=="OneNoteFreeRetail")return "Microsoft OneNote (autonome)";
   if(id.StartsWith("O365Business"))return "Microsoft 365 Apps — Business";
   if(id.StartsWith("O365ProPlus"))return "Microsoft 365 Apps — Enterprise";
-  var names=new[]{"Microsoft 365 Apps — Business","Microsoft 365 Apps — Enterprise","Office 2024 — Famille et Petite Entreprise","Office 2024 — Professionnel","Office LTSC 2024 — Standard","Office LTSC 2024 — Professionnel Plus"};
+  var names=Entry.OfficeNames;
   int index=Array.IndexOf(products,id);return index>=0?names[index]:"Microsoft Office ("+id+")";
  }
  void StartOfficeRemoval(){

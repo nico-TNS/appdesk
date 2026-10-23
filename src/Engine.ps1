@@ -5,14 +5,14 @@ $ProgressPreference='SilentlyContinue'
 $job=Get-Content -LiteralPath $JobPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $run=Split-Path -Parent $JobPath
 $allowed=@('Google.Chrome','Mozilla.Firefox','Opera.Opera','Adobe.Acrobat.Reader.64-bit','WireGuard.WireGuard','Fortinet.VPN','OpenVPNTechnologies.OpenVPN','3CX.Softphone','Microsoft.Office')
-$channels=@{O365BusinessRetail='Current';O365ProPlusRetail='Current';HomeBusiness2024Retail='Current';Professional2024Retail='Current';Standard2024Volume='PerpetualVL2024';ProPlus2024Volume='PerpetualVL2024'}
+$channels=@{O365BusinessRetail='Current';O365ProPlusRetail='Current';HomeBusiness2024Retail='Current';Professional2024Retail='Current';Standard2024Volume='PerpetualVL2024';ProPlus2024Volume='PerpetualVL2024';HomeStudent2021Retail='Current';HomeBusiness2021Retail='Current';Professional2021Retail='Current';Standard2021Volume='PerpetualVL2021';ProPlus2021Volume='PerpetualVL2021'}
 if(!$job.Ids.Count -or @($job.Ids|Select-Object -Unique).Count -ne $job.Ids.Count){throw 'Selection vide ou doublons.'}
 foreach($id in $job.Ids){if($id -notin $allowed){throw 'Application non autorisee dans ce catalogue.'}}
 if(!$channels.ContainsKey([string]$job.Office)){throw 'Edition Office non reconnue.'}
 $removeOffice=$job.Action -eq 'RemoveOffice'
 if($job.Action -and $job.Action -notin @('Install','RemoveOffice')){throw 'Action non autorisee.'}
 if($job.UpdateOnly -and (!$job.Update -or $removeOffice)){throw 'Mode mise a jour seule incompatible avec cette operation.'}
-if($job.ReplaceStandaloneOneNoteConfirmed -and ($removeOffice -or $job.Office -notin @('Standard2024Volume','ProPlus2024Volume') -or 'Microsoft.Office' -notin $job.Ids)){throw 'Remplacement OneNote non autorise pour cette operation.'}
+if($job.ReplaceStandaloneOneNoteConfirmed -and ($removeOffice -or $job.Office -notin @('Standard2024Volume','ProPlus2024Volume','Standard2021Volume','ProPlus2021Volume') -or 'Microsoft.Office' -notin $job.Ids)){throw 'Remplacement OneNote non autorise pour cette operation.'}
 if($removeOffice){
     if($job.Ids.Count -ne 1 -or $job.Ids[0] -ne 'Microsoft.Office' -or !$job.RemovalConfirmed){throw 'La desinstallation Office exige une action distincte et sa confirmation.'}
     $removalXml=Get-OfficeRemovalXml @($job.OfficeProducts)
@@ -184,7 +184,7 @@ function Install-Office {
         $config=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration' -ErrorAction SilentlyContinue
         if(!$config -or [string]$job.Office -notin @([string]$config.ProductReleaseIds -split ',')){throw 'Edition Office absente ou changee : mise a jour seule annulee.'}
         $expectedChannel=$channels[[string]$job.Office]
-        $expectedCdn=if($expectedChannel -eq 'PerpetualVL2024'){'7983bac0-e531-40cf-be00-fd24fe66619c'}else{'492350f6-3a01-4f97-b9c0-c7c6ddf67d60'}
+        $expectedCdn=if($expectedChannel -eq 'PerpetualVL2021'){'5030841d-c919-4594-8d2d-84ae4f96e58e'}elseif($expectedChannel -eq 'PerpetualVL2024'){'7983bac0-e531-40cf-be00-fd24fe66619c'}else{'492350f6-3a01-4f97-b9c0-c7c6ddf67d60'}
         $channelUrl=if($config.UpdateChannel){[string]$config.UpdateChannel}else{[string]$config.CDNBaseUrl}
         if($job.OfficeChannel -ne $expectedChannel -or $channelUrl -notmatch $expectedCdn){throw 'Canal Office non pris en charge ou change : aucune migration automatique.'}
     }
@@ -193,7 +193,7 @@ function Install-Office {
         if($existing.ProductReleaseIds){
             $disposition=Get-OfficeInstallDisposition @([string]$existing.ProductReleaseIds -split ',') ([string]$job.Office) ([string]$existing.Platform) ([bool]$job.Update)
             if($disposition -eq 'Keep'){return -1978335135}
-            if($job.Office -in @('Standard2024Volume','ProPlus2024Volume') -and 'OneNoteFreeRetail' -in @([string]$existing.ProductReleaseIds -split ',')){
+            if($job.Office -in @('Standard2024Volume','ProPlus2024Volume','Standard2021Volume','ProPlus2021Volume') -and 'OneNoteFreeRetail' -in @([string]$existing.ProductReleaseIds -split ',')){
                 if(!$job.ReplaceStandaloneOneNoteConfirmed){throw 'Confirmation requise pour remplacer OneNote autonome par OneNote inclus dans Office LTSC. Relancez la selection dans AppDesk.'}
                 if(Get-Process -Name ONENOTE,WINWORD,EXCEL,POWERPNT,OUTLOOK,MSACCESS,MSPUB -ErrorAction SilentlyContinue){throw 'Enregistrez vos documents et fermez Office et OneNote avant le remplacement confirme. Aucun processus ne sera ferme automatiquement.'}
             }
