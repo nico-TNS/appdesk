@@ -1,12 +1,15 @@
-﻿# SignPath Foundation application draft
+# SignPath Foundation application draft
 
-**Draft only. Not submitted.** Replace the pending fields after publishing the project. Do not claim a public release, external users or an operational signing setup before they exist.
+**Prepared application, updated 23 October 2026. No application has been submitted by this assistant.** The maintainer must confirm contact details, account/admission status, MFA and acceptance of the Foundation conditions. Public release and test evidence below is recorded; no operational signing setup or acceptance is claimed.
 
 ## Project
 
 - Name: AppDesk
 - Public repository: https://github.com/nico-TNS/appdesk
-- Public download/release URL: https://github.com/nico-TNS/appdesk/releases/tag/v2.0.0-preview.1
+- Public download/release URL: https://github.com/nico-TNS/appdesk/releases/tag/v2.4.3-preview.1
+- Stable release: https://github.com/nico-TNS/appdesk/releases/tag/v2.3.0
+- Privacy policy: https://github.com/nico-TNS/appdesk/blob/main/PRIVACY.md
+- Homepage and code signing policy: https://github.com/nico-TNS/appdesk and https://github.com/nico-TNS/appdesk/blob/main/CODE_SIGNING.md
 - License: MIT, covering all project-owned source and assets
 - Proposed maintainer, reviewer and signing approver: `nico-TNS`
 - Applicant’s legal name, contact email and SignPath account: to be supplied privately by the applicant
@@ -20,15 +23,17 @@ Users explicitly select applications, accept the relevant terms and authorize th
 
 ## Why signing is requested
 
-Since preview 2.2, AppDesk also offers a separate Office Click-to-Run suite-removal action. It detects suite IDs, requires a No-default confirmation and Windows elevation, then uses the current signed Microsoft ODT with only the confirmed product IDs. Preview 2.2.1 includes standalone OneNote in the confirmed removal scope, but excludes Visio, Project, MSI and Store variants. It refuses to force-close Office apps and does not automatically reinstall or reboot. This destructive feature must be included in runtime/security review. It has been tested with plans and simulation, not by removing Office from the development PC.
+AppDesk also offers a separate Office Click-to-Run suite-removal action. It detects suite IDs, requires a No-default confirmation and Windows elevation, then uses the current signed Microsoft ODT with only the confirmed product IDs. Standalone OneNote is included in the confirmed removal scope; Visio, Project, MSI and Store variants are excluded. It refuses to force-close Office apps and does not automatically reinstall or reboot. Actual removal of a Microsoft 365 suite and standalone OneNote, followed by Office LTSC 2024 Standard x64 installation, succeeded on the development PC. This destructive feature still requires runtime/security review; one tested configuration does not establish general compatibility.
 
 The initial unsigned executable was blocked by Windows application-control on the development computer. We want a legitimate, auditable distribution process for the project’s own binary rather than changing users’ security settings. We understand that signing is conditional on your review and is not evidence that every application installation has been audited.
 
 ## Track record and current limitations
 
-This is a new project. We do not yet claim an established public reputation, external user base, multiple maintainers or a history of public releases. The repository and first unsigned preview release are public. GitHub-hosted build/test run [39933286305](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) passed. We understand that a new project may not yet satisfy your reputation requirements.
+This is a new project with public releases during October 2026. We do not claim an established public reputation, broad external adoption, an independent security audit or multiple maintainers. The repository, stable 2.3.0 release and later unsigned previews are public. GitHub-hosted build/test run [39994182140](https://github.com/nico-TNS/appdesk/actions/runs/39994182140) passed for the current candidate. We understand that a new project may not yet satisfy the Foundation reputation requirements.
 
-Local checks cover compilation, declarative UI rendering, silent installation plans, six Office configurations, queue simulation, stopping and dependency-error handling. End-to-end installation testing and production signing are pending. The FortiClient online bootstrapper does not satisfy our silent-install requirements; a full official package is required.
+Automated checks cover compilation, declarative UI/report rendering, eleven Office configurations, selection persistence, update-only guards, retries, incomplete transfers, queue concurrency, worker diagnostics, access-denied handling and redirected Documents. Real tests include FortiClient VPN 7.4.3.6002 installation (valid Fortinet signature, MSI UILevel=2, exit 0, installed version/service verified), and Chrome update from registry version 156.0.8078.47 to 156.0.8078.48 (exit 0, valid staged Google executable; activation remained pending because Chrome was left open at the user's request). The maintainer reports testing on a second TNS workstation; supplied screenshots identified issues subsequently addressed in 2.4.2/2.4.3. No independent verification of the latest fix on that second workstation is claimed. See [COMPATIBILITY.md](COMPATIBILITY.md) and the public release notes for limits. Other Office editions, activation and VPN connection testing remain unverified.
+
+The current unsigned candidate is version 2.4.3.0, built from commit `f240c41d14111042284e6b55ec3b086d0f9320fb`. Its published SHA-256 is `e7fdac77c3be14d6db351c3ec63902003bb12f4a211334182ecee43aac84a80e`. A later signed artifact will have a different hash. Only the repository-built AppDesk executable is requested for signing.
 
 ## Runtime and security review disclosure
 
@@ -53,7 +58,8 @@ Please assess whether this project qualifies for the Foundation program and advi
 - [x] Public repository and download page exist.
 - [x] Initial source and binary release are published, honestly labeled as unsigned.
 - [x] CI has run successfully on GitHub-hosted runners.
-- [ ] Real installation and security tests are recorded.
+- [x] Real installation results and their limits are recorded.
+- [ ] Independent runtime/security review is complete.
 - [ ] Proposed roles, ownership, contact details and MFA are confirmed.
 - [ ] Runtime PowerShell/signing design has been reviewed and any required changes resolved.
 - [ ] Remaining limitations and the project’s actual reputation are disclosed.

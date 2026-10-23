@@ -1,10 +1,10 @@
 # Préparer la candidature SignPath Foundation
 
-Ce dossier prépare une candidature ; il ne crée pas de compte SignPath, ne publie pas de dépôt et n’envoie pas de formulaire. Le projet est récent, sans historique public ni réputation attestée à ce stade. SignPath peut différer ou refuser la demande.
+Ce dossier prépare une candidature ; il ne crée pas de compte SignPath, ne publie pas de dépôt et n’envoie pas de formulaire. Le projet est récent : dépôt public, version stable 2.3.0 et préversions publiés ; aucune réputation publique établie ne peut encore être revendiquée. SignPath peut différer ou refuser la demande.
 
 ## 1. Publier et établir une première version
 
-1. Confirmer le propriétaire et le nom du dépôt : proposition `nico-TNS/appdesk`.
+1. Propriétaire et dépôt publiés : `nico-TNS/appdesk`.
 2. Créer le dépôt **public**, puis y publier le contenu de ce dossier sous licence MIT. Ne pas inclure `dist`, clés privées, journaux personnels ou packages d’éditeurs.
 3. Confirmer les rôles de `MAINTAINERS.md`, activer la MFA et protéger `main`. Exiger les contrôles CI, la revue du code sensible et interdire les force-pushs. Ces réglages ne sont pas appliqués par les fichiers du dépôt.
 4. Exécuter `Build and test` et examiner son journal, puis effectuer les essais réels dans un environnement autorisé. Ne pas désactiver une protection du poste pour faire passer les essais.
@@ -18,7 +18,7 @@ Le formulaire officiel est [Apply](https://signpath.org/apply.html). Lire les [c
 - Faire examiner le moteur PowerShell embarqué et sa politique de lancement décrits dans `SECURITY.md`. Une signature de l’EXE ne garantit pas à elle seule l’autorisation du script extrait.
 - Valider les chemins de session, l’élévation, le contrôle du lanceur WinGet et la vérification des packages dans un test de sécurité adapté.
 - Tester chaque installation silencieuse réellement, y compris les annulations et codes de redémarrage.
-- Obtenir un package FortiClient VPN complet officiel ; le lanceur en ligne trouvé localement ne convient pas au silence complet.
+- Le package FortiClient VPN complet officiel a été téléchargé et installé silencieusement sur le poste de développement. Les connexions VPN restent à tester.
 - Conserver des instructions de désinstallation et une politique de confidentialité à jour.
 
 Présenter les limites restantes dans la candidature. Si SignPath exige une modification d’architecture ou un moteur natif, la réaliser avant une signature de production ; ne pas masquer le fonctionnement du moteur.

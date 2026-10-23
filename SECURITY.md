@@ -1,10 +1,10 @@
-﻿# Security policy
+# Security policy
 
 ## Reporting
 
 After the repository is public, use its private GitHub **Report a vulnerability** feature when enabled. If unavailable, contact the maintainer via the public GitHub profile to arrange a private report. Do not post exploit details or secrets in a public issue. No response-time commitment or independent audit is claimed for this initial project.
 
-Only the current maintained release is intended to receive fixes. Version 2.0 is currently a pre-release candidate; production signing and full installation tests are pending.
+Only the current maintained release is intended to receive fixes. Version 2.3.0 is the published unsigned stable release; 2.4.3-preview.1 is the latest unsigned preview. Production signing and an independent runtime/security review remain pending.
 
 ## Runtime model
 
@@ -18,8 +18,8 @@ Session files and package paths are local to the interactive user. The current d
 
 Preview 2.3 downloads through unique partial files, limits transient-transfer retries and publishes only complete transfers before publisher verification. A named mutex prevents overlapping queues between new engines but is not a security boundary against local malware or older AppDesk versions. Worker output/error logs and fatal startup states are retained locally; they must be redacted before sharing. These controls improve failure handling and do not replace trusted signing, security review or clean-machine installation tests.
 
-Office removal is a distinct, destructive action requiring an explicit No-default UI confirmation and a separate elevated queue. It uses targeted ODT product IDs, not `Remove All=TRUE` or `RemoveMSI`. Suite IDs are allowlisted and checked against installed products again. Standalone OneNote is included in the confirmed removal targets; Visio and Project are excluded. A separate No-default confirmation is required before replacing standalone OneNote during an LTSC installation. Open Office processes block removal rather than being killed. Real uninstallation has not been tested on the development PC; plan and simulation coverage does not prove production compatibility.
+Office removal is a distinct, destructive action requiring an explicit No-default UI confirmation and a separate elevated queue. It uses targeted ODT product IDs, not `Remove All=TRUE` or `RemoveMSI`. Suite IDs are allowlisted and checked against installed products again. Standalone OneNote is included in the confirmed removal targets; Visio and Project are excluded. A separate No-default confirmation is required before replacing standalone OneNote during an LTSC installation. Open Office processes block removal rather than being killed. Actual Microsoft 365 suite and standalone OneNote removal succeeded on the development PC; that evidence does not establish every edition's compatibility or constitute a security audit.
 
 Only the repository-built AppDesk artifact is eligible for signing. Do not submit third-party installers or manually replaced binaries. Treat signing tokens, production environments, release approvals and action updates as sensitive. Use MFA and revoke exposed tokens. Signed artifacts must be checked after download; no signature is presently supplied with this preparation.
 
-Known functional limits, including the full-package requirement for FortiClient, are documented on the README. Tests so far cover compilation, plans, simulation and UI design; they do not establish end-to-end installation safety or compatibility.
+Known functional limits, including the full-package requirement for FortiClient, are documented on the README. Compilation, plans, simulations, fault handling and UI/report tests pass. Real Office, FortiClient and Chrome outcomes are recorded with their limits; broad deployment compatibility and end-to-end security are not established. New sessions use LocalApplicationData/AppDesk/Sessions to avoid dependence on redirected Documents and elevated access to network shares. Session files remain user-writable; a signature does not make them a security boundary.

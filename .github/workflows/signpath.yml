@@ -38,9 +38,21 @@ jobs:
         run: |
           .\scripts\Test-Project.ps1
           .\scripts\Test-Engine.ps1
+          .\scripts\Test-Sources.ps1
+          .\scripts\Test-OfficeRemoval.ps1
+          .\scripts\Test-Reliability.ps1
+          .\scripts\Test-Inventory.ps1
+          .\scripts\Test-UpdateOnly.ps1
+          .\scripts\Test-FortiPreflight.ps1
       - name: Build from this workflow source
         id: build
         run: .\scripts\Build.ps1
+      - name: Verify built application without installing catalogue apps
+        run: |
+          .\scripts\Test-Reports.ps1
+          .\scripts\Test-WorkerDiagnostics.ps1
+          .\scripts\Test-Selections.ps1
+          .\scripts\Test-LocalSessions.ps1
       - name: Upload signing input for GitHub origin verification
         id: unsigned
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
