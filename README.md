@@ -29,7 +29,7 @@ La progression globale mesure les applications traitées, y compris les échecs 
 ## Limites connues
 
 - L’exécutable non signé a été bloqué par le contrôle des applications du poste de développement. Aucun réglage de sécurité n’a été modifié pour le lancer.
-- La compilation, les plans silencieux et les simulations passent localement. Les tests réels de l’exécutable et des installations restent à effectuer dans un environnement autorisé. Les workflows GitHub Actions n’ont pas encore été exécutés.
+- La compilation, les plans silencieux et les simulations passent localement. Les tests réels de l’exécutable et des installations restent à effectuer dans un environnement autorisé. La [CI GitHub Actions](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) a réussi, y compris le test natif des ressources embarquées.
 - FortiClient nécessite son MSI/EXE VPN **complet et signé par Fortinet**. Le petit lanceur en ligne est refusé ; aucun téléchargement tiers de substitution n’est utilisé.
 - Office nécessite une licence et une activation normales. Une autre édition Click-to-Run présente n’est pas désinstallée automatiquement. Une édition identique est conservée.
 - Les profils VPN et les comptes 3CX restent à configurer. Le mode silencieux dépend du comportement de chaque version d’installateur.

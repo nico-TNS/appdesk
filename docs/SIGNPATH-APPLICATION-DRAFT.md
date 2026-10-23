@@ -5,8 +5,8 @@
 ## Project
 
 - Name: AppDesk
-- Proposed repository: `https://github.com/nico-TNS/appdesk` — not created by this preparation
-- Public download/release URL: pending publication
+- Public repository: https://github.com/nico-TNS/appdesk
+- Public download/release URL: https://github.com/nico-TNS/appdesk/releases/tag/v2.0.0-preview.1
 - License: MIT, covering all project-owned source and assets
 - Proposed maintainer, reviewer and signing approver: `nico-TNS`
 - Applicant’s legal name, contact email and SignPath account: to be supplied privately by the applicant
@@ -24,7 +24,7 @@ The initial unsigned executable was blocked by Windows application-control on th
 
 ## Track record and current limitations
 
-This is a new project. We do not yet claim an established public reputation, external user base, multiple maintainers or a history of public releases. Repository publication, a documented initial release and GitHub-hosted CI must be completed before this draft is submitted. We understand that a new project may not yet satisfy your reputation requirements.
+This is a new project. We do not yet claim an established public reputation, external user base, multiple maintainers or a history of public releases. The repository and first unsigned preview release are public. GitHub-hosted build/test run [39933286305](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) passed. We understand that a new project may not yet satisfy your reputation requirements.
 
 Local checks cover compilation, declarative UI rendering, silent installation plans, six Office configurations, queue simulation, stopping and dependency-error handling. End-to-end installation testing and production signing are pending. The FortiClient online bootstrapper does not satisfy our silent-install requirements; a full official package is required.
 
@@ -48,9 +48,9 @@ Please assess whether this project qualifies for the Foundation program and advi
 
 ## Submission checklist
 
-- [ ] Public repository and download page exist.
-- [ ] Initial source and binary release are published, honestly labeled as unsigned.
-- [ ] CI has run successfully on GitHub-hosted runners.
+- [x] Public repository and download page exist.
+- [x] Initial source and binary release are published, honestly labeled as unsigned.
+- [x] CI has run successfully on GitHub-hosted runners.
 - [ ] Real installation and security tests are recorded.
 - [ ] Proposed roles, ownership, contact details and MFA are confirmed.
 - [ ] Runtime PowerShell/signing design has been reviewed and any required changes resolved.

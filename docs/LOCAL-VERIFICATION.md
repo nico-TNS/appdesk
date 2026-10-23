@@ -15,6 +15,6 @@ The following checks passed on the development computer without installing any c
 | GitHub Actions references | Full commit SHAs; GitHub-hosted Windows runners specified |
 | Source privacy scan | No absolute development-user path, private key or populated API token found by the local checks |
 
-These are local build/configuration checks, not a SignPath admission result. GitHub workflows and the signing connector have not been executed. The new executable could not be run on the development PC because its Windows application-control policy blocked the unsigned binary. No control was disabled. Real installation behavior, production signatures, runtime-script policy compatibility and security review remain release gates.
+These are local build/configuration checks, not a SignPath admission result. GitHub build/test run [39933286305](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) passed, including the native resource smoke test. The signing connector has not been executed. The new executable could not be run on the development PC because its Windows application-control policy blocked the unsigned binary. No control was disabled. Real installation behavior, production signatures, runtime-script policy compatibility and security review remain release gates.
 
 The source archive intentionally excludes compiled installers, session logs, local Git metadata and third-party installation packages. The existing screenshot is an illustrative rendering of the source UI rather than evidence of actual installations.
