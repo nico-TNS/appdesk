@@ -24,9 +24,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.4.1.0")]
-[assembly: AssemblyInformationalVersion("2.4.1.0")]
-[assembly: AssemblyVersion("2.4.1.0")]
+[assembly: AssemblyFileVersion("2.4.2.0")]
+[assembly: AssemblyInformationalVersion("2.4.2.0")]
+[assembly: AssemblyVersion("2.4.2.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}

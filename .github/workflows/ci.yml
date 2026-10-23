@@ -30,6 +30,7 @@ jobs:
           .\scripts\Test-Reliability.ps1
           .\scripts\Test-Inventory.ps1
           .\scripts\Test-UpdateOnly.ps1
+          .\scripts\Test-FortiPreflight.ps1
       - name: Compile owned executable
         run: .\scripts\Build.ps1
       - name: Smoke-test embedded UI resources without installing apps

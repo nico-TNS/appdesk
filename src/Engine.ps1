@@ -110,11 +110,6 @@ function Install-Forti {
     if(!$package){
         Report 'Recherche de version' 'Recherche du dernier package VPN x64 sur le portail officiel Fortinet…'
         $info=Get-FortiSource
-        $package=Join-Path $run $info.FileName
-        Download $info.Url $package @('s3.cn-north-1.amazonaws.com.cn','filestore.fortinet.com')
-        Report 'Vérification' ('Vérification de FortiClient VPN '+$info.Version+' et de sa signature Fortinet…')
-        Test-FortiDownload $package $info.Version
-        Record-Source $info $package
         if(Installed-Forti){
             $installedVersions=@(foreach($root in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')){
                 if(Test-Path $root){Get-ItemProperty "$root\*" -ErrorAction SilentlyContinue|Where-Object {$_.DisplayName -match '^FortiClient VPN'}|ForEach-Object {$v=$null;if([version]::TryParse($_.DisplayVersion,[ref]$v)){$v}}}
@@ -122,6 +117,11 @@ function Install-Forti {
             if(!$installedVersions.Count){throw 'Version FortiClient installee inconnue : mise a jour automatique annulee.'}
             if(($installedVersions|Sort-Object -Descending|Select-Object -First 1) -ge $info.Version){return -1978335135}
         }
+        $package=Join-Path $run $info.FileName
+        Download $info.Url $package @('s3.cn-north-1.amazonaws.com.cn','filestore.fortinet.com')
+        Report 'Vérification' ('Vérification de FortiClient VPN '+$info.Version+' et de sa signature Fortinet…')
+        Test-FortiDownload $package $info.Version
+        Record-Source $info $package
     }
     if(!(Test-Path -LiteralPath $package)){throw 'Le package FortiClient selectionne est introuvable.'}
     $extension=[IO.Path]::GetExtension($package).ToLowerInvariant()
