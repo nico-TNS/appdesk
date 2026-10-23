@@ -1,0 +1,37 @@
+name: Publish preview assets
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-2022
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Verify source run and download its artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = gh api repos/$env:GH_REPO/actions/runs/39933286305 | ConvertFrom-Json
+          if ($run.conclusion -ne 'success' -or $run.head_sha -ne 'c1e681ceab6826b0bbed069396fe19520ebcccd4') { throw 'Unexpected build provenance' }
+          $release = gh release view v2.0.0-preview.1 --json tagName,isPrerelease | ConvertFrom-Json
+          if (-not $release.isPrerelease) { throw 'Expected prerelease' }
+          gh run download 39933286305 -n AppDesk-unsigned-c1e681ceab6826b0bbed069396fe19520ebcccd4 -D assets
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed' }
+          $hash = (Get-FileHash assets/MonInstallateur.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '56b3864e935792704fc684237ef64710b9b4588b059bc4992fe4486b4de05cc4') { throw 'Unexpected executable hash' }
+          $line = (Get-Content assets/SHA256SUMS.txt -Raw).Trim()
+          if ($line -ne "$hash  MonInstallateur.exe") { throw 'Checksum file mismatch' }
+      - name: Attach verified unsigned executable
+        shell: pwsh
+        run: |
+          gh release upload v2.0.0-preview.1 assets/MonInstallateur.exe assets/SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
