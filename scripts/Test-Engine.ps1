@@ -11,12 +11,17 @@ $plan=Invoke-Plan
 if($plan.operations.Count -ne 9 -or $plan.installationStarted){throw 'Plan catalogue incorrect.'}
 foreach($operation in $plan.operations){if(!$operation.silent){throw 'Mode non silencieux.'}}
 if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments -notcontains '--no-upgrade'){throw 'Mode conservation incorrect.'}
+if(!($plan.operations|Where-Object id -eq 'Fortinet.VPN').automatic){throw 'Forti automatic source is not default.'}
+$job.Forti='manual.exe';Write-Job;$plan=Invoke-Plan
+if(($plan.operations|Where-Object id -eq 'Fortinet.VPN').automatic){throw 'Manual override ignored.'}
+$job.Forti=''
 $job.Update=$true;Write-Job;$plan=Invoke-Plan
 if(($plan.operations|Where-Object id -eq 'Google.Chrome').arguments -contains '--no-upgrade'){throw 'Mode mise a jour incorrect.'}
 foreach($product in @('O365BusinessRetail','O365ProPlusRetail','HomeBusiness2024Retail','Professional2024Retail','Standard2024Volume','ProPlus2024Volume')){
     $job.Office=$product;Write-Job;$plan=Invoke-Plan
     $xml=[xml](($plan.operations|Where-Object id -eq 'Microsoft.Office').xml)
     if($xml.Configuration.Display.Level -ne 'None' -or $xml.Configuration.Add.Product.ID -ne $product -or $xml.Configuration.RemoveMSI){throw 'Configuration Office incorrecte.'}
+    if($xml.Configuration.Add.Version -or $xml.Configuration.Add.SourcePath -or $xml.Configuration.Updates.Enabled -ne 'TRUE'){throw 'Office is pinned to an old build or local cache.'}
 }
 Write-Job
 & $engine -JobPath (Join-Path $temp 'job.json')

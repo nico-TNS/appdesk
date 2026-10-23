@@ -23,9 +23,9 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("AppDesk contributors")]
 [assembly: AssemblyProduct("AppDesk")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 AppDesk contributors")]
-[assembly: AssemblyFileVersion("2.0.0.0")]
-[assembly: AssemblyInformationalVersion("2.0.0.0")]
-[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.1.0.0")]
+[assembly: AssemblyInformationalVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
 
 public sealed class AppItem : INotifyPropertyChanged {
  public string Id {get;set;} public string Title {get;set;} public string Subtitle {get;set;}
@@ -42,6 +42,7 @@ public sealed class Job {
  public string Forti {get;set;} public string Winget {get;set;} public bool Simulate {get;set;}
 }
 public sealed class Outcome {public string id{get;set;} public string status{get;set;} public string detail{get;set;} public int code{get;set;}}
+public sealed class ReportRow {public string Title{get;set;} public string Status{get;set;} public string Detail{get;set;} public string Code{get;set;} public string Color{get;set;}}
 public sealed class State {
  public int completed{get;set;} public int total{get;set;} public string current{get;set;}
  public string phase{get;set;} public double percent{get;set;} public string message{get;set;}
@@ -58,7 +59,7 @@ public static class Entry {
   Item("Opera.Opera","Opera","Navigation web","Navigateurs","O","#E64D64","winget"),
   Item("Adobe.Acrobat.Reader.64-bit","Acrobat Reader","Documents PDF · 64 bits","Bureautique","A","#E8494D","winget"),
   Item("WireGuard.WireGuard","WireGuard","VPN WireGuard","VPN","W","#A33147","winget"),
-  Item("Fortinet.VPN","FortiClient VPN","VPN · package complet","VPN","F","#D55149","fortinet"),
+  Item("Fortinet.VPN","FortiClient VPN","VPN · téléchargement automatique","VPN","F","#D55149","fortinet"),
   Item("OpenVPNTechnologies.OpenVPN","OpenVPN","VPN · édition Community","VPN","O","#EB9339","winget"),
   Item("3CX.Softphone","3CX","Client téléphonique Windows","Bureautique","3","#4561BD","winget"),
   Item("Microsoft.Office","Microsoft Office","Microsoft 365 · 2024 · LTSC","Bureautique","M","#D96B3D","office")
@@ -82,6 +83,7 @@ public static class Entry {
   if(!job.Simulate&&!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))return 740;
   string script=Path.Combine(Path.GetDirectoryName(path),"engine.ps1");
   File.WriteAllText(script,Resource("engine"),new UTF8Encoding(true));
+  File.WriteAllText(Path.Combine(Path.GetDirectoryName(path),"Sources.ps1"),Resource("sources"),new UTF8Encoding(true));
   var info=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),@"WindowsPowerShell\v1.0\powershell.exe"));
   info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Quote(script)+" -JobPath "+Quote(Path.GetFullPath(path));
   info.UseShellExecute=false;info.CreateNoWindow=true;info.WindowStyle=ProcessWindowStyle.Hidden;
@@ -92,6 +94,7 @@ public static class Entry {
   if(apps.Count!=9||apps.Select(x=>x.Id).Distinct().Count()!=9)throw new Exception("Catalogue invalide.");
   string xaml=Resource("ui");var w=(Window)XamlReader.Parse(xaml);
   if(w.FindName("Overall")==null||w.FindName("Install")==null)throw new Exception("Interface invalide.");
+  if(w.FindName("ReportPanel")==null||Resource("sources").IndexOf("Get-FortiSource")<0)throw new Exception("Ressources de bilan ou sources absentes.");
   w.Close();
   if(path!=null)File.WriteAllText(path,"Catalogue: 9\nWPF: OK\nRessources embarquées: OK\nAucune installation lancée.");
   return 0;
@@ -105,6 +108,7 @@ public sealed class InstallerUi {
  readonly string[] products={"O365BusinessRetail","O365ProPlusRetail","HomeBusiness2024Retail","Professional2024Retail","Standard2024Volume","ProPlus2024Volume"};
  string category="",forti="",runPath="",settingsRoot;bool running,simulating;
  Process worker;DispatcherTimer timer;DateTime startTime;State lastState;
+ AppItem[] queuedApps;List<ReportRow> reportRows;string reportText="";DateTime? reportEndedAt;
  readonly string[] args;
  T Find<T>(string name)where T:class{return Window.FindName(name)as T;}
  public InstallerUi(string[] arguments){
@@ -123,6 +127,11 @@ public sealed class InstallerUi {
   Find<Button>("ClearAll").Click+=(s,e)=>{foreach(var item in apps)item.Selected=false;};
   consent.Checked+=(s,e)=>UpdateSelection();consent.Unchecked+=(s,e)=>UpdateSelection();
   Find<Button>("ChooseForti").Click+=(s,e)=>ChooseForti();
+  Find<Button>("AutoForti").Click+=(s,e)=>{forti="";DetectForti();};
+  Find<Button>("BackToApps").Click+=(s,e)=>ShowReport(false);
+  Find<Button>("ShowReport").Click+=(s,e)=>ShowReport(true);
+  Find<Button>("ExportReport").Click+=(s,e)=>{var d=new SaveFileDialog{Title="Exporter le rapport",Filter="Rapport texte (*.txt)|*.txt",FileName="AppDesk-rapport-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".txt"};if(d.ShowDialog(Window)==true)try{File.WriteAllText(d.FileName,reportText,new UTF8Encoding(true));}catch(Exception ex){MessageBox.Show(Window,"Export impossible : "+ex.Message,"Rapport AppDesk");}};
+  Find<Button>("ReportLogs").Click+=(s,e)=>{if(Directory.Exists(runPath))Process.Start(new ProcessStartInfo("explorer.exe",Entry.Quote(runPath)){UseShellExecute=true});};
   Find<System.Windows.Documents.Hyperlink>("OpenLogs").Click+=(s,e)=>{if(Directory.Exists(runPath))Process.Start(new ProcessStartInfo("explorer.exe",Entry.Quote(runPath)){UseShellExecute=true});};
   install.Click+=(s,e)=>Start(false);
   stop.Click+=(s,e)=>{File.WriteAllText(Path.Combine(runPath,"stop.request"),"stop");stop.IsEnabled=false;activity.Text="Arrêt demandé après l’application en cours.";};
@@ -131,11 +140,10 @@ public sealed class InstallerUi {
   Window.Closing+=(s,e)=>{if(running){e.Cancel=true;activity.Text="Utilisez « Arrêter après cette app » et attendez la fin de l’installation en cours.";}};
   Window.Loaded+=(s,e)=>OnLoaded();
   timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(350)};timer.Tick+=(s,e)=>Poll();
-  string pref=Path.Combine(settingsRoot,"forticlient.txt");if(File.Exists(pref)){string p=File.ReadAllText(pref).Trim();if(File.Exists(p))forti=p;}
   DetectForti();UpdateSelection();
  }
  bool Filter(object value){var app=(AppItem)value;return(category==""||app.Category==category)&&(app.Title.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0||app.Subtitle.IndexOf(search.Text,StringComparison.OrdinalIgnoreCase)>=0);}
- void Navigate(string value){category=value;view.Refresh();}
+ void Navigate(string value){ShowReport(false);category=value;view.Refresh();}
  void UpdateSelection(){
   int count=apps.Count(a=>a.Selected);if(!running)completed.Text=count+" application"+(count>1?"s":"")+" sélectionnée"+(count>1?"s":"");
   install.IsEnabled=!running&&count>0&&consent.IsChecked==true;
@@ -147,22 +155,18 @@ public sealed class InstallerUi {
   return new FileInfo(path).Length>20000000&&(version.FileDescription??"").IndexOf("online",StringComparison.OrdinalIgnoreCase)<0;
  }
  void DetectForti(){
-  if(forti==""){
-   string dir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),@"Nextcloud\Commun\Installateurs\FortiClient");
-   if(Directory.Exists(dir))foreach(string file in Directory.GetFiles(dir)){if((file.EndsWith(".msi",StringComparison.OrdinalIgnoreCase)||file.EndsWith(".exe",StringComparison.OrdinalIgnoreCase))&&IsFullPackage(file)){forti=file;break;}}
-  }
-  if(forti!="")fortiHint.Text="FortiClient : "+Path.GetFileName(forti)+" · signature vérifiée avant installation.";
+  fortiHint.Text=forti==""?"Versions résolues en ligne · FortiClient VPN : portail officiel régional Fortinet, signature vérifiée.":"FortiClient manuel : "+Path.GetFileName(forti)+" · cliquez sur Automatique pour rechercher la dernière version.";
  }
  void ChooseForti(){
   var dialog=new OpenFileDialog{Title="Package complet officiel FortiClient VPN",Filter="Installateur FortiClient (*.msi;*.exe)|*.msi;*.exe"};
   string dir=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),@"Nextcloud\Commun\Installateurs\FortiClient");if(Directory.Exists(dir))dialog.InitialDirectory=dir;
   if(dialog.ShowDialog(Window)!=true)return;
   if(!IsFullPackage(dialog.FileName)){MessageBox.Show(Window,"Ce fichier est un lanceur en ligne. Sélectionnez le MSI ou l’EXE complet FortiClient VPN pour une installation silencieuse.","Package incomplet",MessageBoxButton.OK,MessageBoxImage.Information);return;}
-  forti=dialog.FileName;Directory.CreateDirectory(settingsRoot);File.WriteAllText(Path.Combine(settingsRoot,"forticlient.txt"),forti);DetectForti();
+  forti=dialog.FileName;DetectForti();
  }
  void Enable(bool enabled){
   cards.IsEnabled=enabled;search.IsEnabled=enabled;updates.IsEnabled=enabled;consent.IsEnabled=enabled;
-  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","NavAll","NavWeb","NavVpn","NavWork"})Find<Button>(name).IsEnabled=enabled;
+  foreach(string name in new[]{"SelectAll","ClearAll","ChooseForti","AutoForti","NavAll","NavWeb","NavVpn","NavWork","ShowReport"})Find<Button>(name).IsEnabled=enabled;
   stop.Visibility=enabled?Visibility.Collapsed:Visibility.Visible;stop.IsEnabled=true;UpdateSelection();
   install.Content=enabled?"Installer la sélection  →":"En cours…";
  }
@@ -174,9 +178,9 @@ public sealed class InstallerUi {
  }
  void Start(bool demo){
   var selected=apps.Where(a=>a.Selected).ToArray();if(selected.Length==0||running)return;
-  if(!demo&&selected.Any(a=>a.Kind=="fortinet")&&(forti==""||!File.Exists(forti))){MessageBox.Show(Window,"Le silence complet de FortiClient nécessite son installateur complet. Cliquez sur « Package FortiClient… » pour sélectionner le MSI ou l’EXE complet. Le fichier Online Installation présent dans Nextcloud ne convient pas.","FortiClient VPN",MessageBoxButton.OK,MessageBoxImage.Information);return;}
   string winget=Winget();if(!demo&&selected.Any(a=>a.Kind=="winget")&&winget==""){MessageBox.Show(Window,"Installez « Programme d’installation d’application » de Microsoft pour disposer de WinGet.","WinGet requis");return;}
   try{
+   queuedApps=selected;reportEndedAt=null;ShowReport(false);Find<Button>("ShowReport").Visibility=Visibility.Collapsed;
    runPath=Path.Combine(settingsRoot,"Sessions",DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,6));Directory.CreateDirectory(runPath);
    var job=new Job{Ids=selected.Select(a=>a.Id).ToArray(),Update=updates.IsChecked==true,Office=products[edition.SelectedIndex],Forti=forti,Winget=winget,Simulate=demo};
    string path=Path.Combine(runPath,"job.json");File.WriteAllText(path,Entry.Json.Serialize(job),new UTF8Encoding(false));
@@ -192,7 +196,7 @@ public sealed class InstallerUi {
   string path=Path.Combine(runPath,"state.json");
   try{if(File.Exists(path)){State state;using(var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var reader=new StreamReader(file,Encoding.UTF8)){state=Entry.Json.Deserialize<State>(reader.ReadToEnd());}lastState=state;Apply(state);if(state.done){Finish(state);return;}}}catch(IOException){}catch(ArgumentException){}
   if(worker!=null&&worker.HasExited){
-   if(lastState==null||!lastState.done){Finish(null);title.Text="Installation interrompue";activity.Text="Le moteur s’est arrêté sans bilan. Consultez les journaux dans "+runPath;ExitCode=simulating?1:0;}
+   if(lastState==null||!lastState.done){Finish(lastState);title.Text="Installation interrompue";activity.Text="Le moteur s’est arrêté sans bilan complet. Consultez le rapport.";ExitCode=simulating?1:0;}
   }
  }
  void Apply(State state){
@@ -217,13 +221,43 @@ public sealed class InstallerUi {
    activity.Text=(state.reboot?"Redémarrage requis (non lancé). ":"")+issue;activity.ToolTip=activity.Text+"\nJournaux : "+runPath;
    foreach(var app in apps.Where(a=>a.Status=="Dans la file"))app.Status="Non traitée";
   }
+  BuildReport(state);ShowReport(true);Find<Button>("ShowReport").Visibility=Visibility.Visible;
   if(simulating&&args.Contains("--test-run")){
-   string output=ArgumentValue("--test-run");if(output!=null){Directory.CreateDirectory(output);File.WriteAllText(Path.Combine(output,"simulation-result.json"),Entry.Json.Serialize(state));Capture(Path.Combine(output,"simulation.png"));}
+   string output=ArgumentValue("--test-run");if(output!=null){Directory.CreateDirectory(output);File.WriteAllText(Path.Combine(output,"simulation-result.json"),Entry.Json.Serialize(state));File.WriteAllText(Path.Combine(output,"report.txt"),reportText);Capture(Path.Combine(output,"simulation.png"));}
    ExitCode=state!=null&&state.done&&state.completed==9?0:1;Window.Close();
   }
  }
+ void ShowReport(bool show){Find<Grid>("ReportPanel").Visibility=show?Visibility.Visible:Visibility.Collapsed;Find<Grid>("CatalogPanel").Visibility=show?Visibility.Collapsed:Visibility.Visible;}
+ void BuildReport(State state){
+  var results=state==null||state.outcomes==null?new List<Outcome>():state.outcomes;
+  reportRows=new List<ReportRow>();
+  foreach(var app in queuedApps??new AppItem[0]){
+   var result=results.FirstOrDefault(x=>x.id==app.Id);
+   string status=result==null?"Non traitée":result.status;
+   string detail=result==null?(state!=null&&state.stopped?"File arrêtée avant cette application.":state!=null&&state.fatal?state.message:"Le moteur n’a pas fourni de résultat pour cette application."):result.detail;
+   reportRows.Add(new ReportRow{Title=app.Title,Status=status,Detail=detail,Code=result==null?"":("Code "+result.code+" · 0x"+unchecked((uint)result.code).ToString("X8")),Color=result==null?"#7C8BA3":status=="Échec"?"#C13C4B":result.code==3010?"#9A6A15":"#237E63"});
+  }
+  int failed=results.Count(x=>x.status=="Échec"),installed=results.Count(x=>x.code==0||x.code==3010),kept=results.Count-failed-installed,missing=reportRows.Count-results.Count;
+  Find<TextBlock>("ReportTitle").Text=simulating?"Bilan de démonstration":state==null||!state.done||state.fatal||(!state.stopped&&state.completed<state.total)?"Parcours interrompu":state.stopped?"Bilan après arrêt":failed>0?"Installation terminée avec des erreurs":"Votre sélection est prête.";
+  Find<TextBlock>("ReportSummary").Text=installed+" réussie(s) · "+kept+" conservée(s) · "+failed+" échec(s) · "+Math.Max(0,missing)+" non traitée(s)";
+  DateTime ended=reportEndedAt??DateTime.Now;
+  Find<TextBlock>("ReportContext").Text=(simulating?"Simulation : aucune application installée. · ":"")+ended.ToString("dd/MM/yyyy HH:mm")+" · Durée : "+(ended-startTime).ToString(@"hh\:mm\:ss")+(state!=null&&state.reboot?" · Redémarrage requis, non lancé.":"");
+  Find<TextBlock>("ReportIssue").Text=state!=null&&state.fatal?state.message:state==null||!state.done?"Résultats partiels : le moteur s’est arrêté sans bilan complet.":"";
+  Find<ItemsControl>("ReportRows").ItemsSource=reportRows;
+  var text=new StringBuilder();text.AppendLine("APPDESK — "+Find<TextBlock>("ReportTitle").Text);text.AppendLine(Find<TextBlock>("ReportContext").Text);text.AppendLine(Find<TextBlock>("ReportSummary").Text);text.AppendLine(Find<TextBlock>("ReportIssue").Text);
+  foreach(var row in reportRows){text.AppendLine();text.AppendLine(row.Title+" : "+row.Status);text.AppendLine(row.Detail);text.AppendLine(row.Code);}
+  string sources=Path.Combine(runPath,"sources.jsonl");if(File.Exists(sources)){text.AppendLine();text.AppendLine("Provenance des téléchargements vérifiés :");text.AppendLine(File.ReadAllText(sources));}
+  text.AppendLine();text.AppendLine("Journaux : "+runPath);reportText=text.ToString();
+  try{File.WriteAllText(Path.Combine(runPath,"rapport.txt"),reportText,new UTF8Encoding(true));}catch(IOException){}catch(UnauthorizedAccessException){}
+ }
  string ArgumentValue(string key){int n=Array.IndexOf(args,key);return n>=0&&n+1<args.Length?args[n+1]:null;}
  void OnLoaded(){
+  string session=ArgumentValue("--report-session");
+  if(session!=null){
+   runPath=Path.GetFullPath(session);var job=Entry.Json.Deserialize<Job>(File.ReadAllText(Path.Combine(runPath,"job.json")));
+   queuedApps=apps.Where(a=>job.Ids.Contains(a.Id)).ToArray();startTime=Directory.GetCreationTime(runPath);reportEndedAt=File.GetLastWriteTime(Path.Combine(runPath,"state.json"));simulating=job.Simulate;
+   var state=Entry.Json.Deserialize<State>(File.ReadAllText(Path.Combine(runPath,"state.json")));BuildReport(state);ShowReport(true);Find<Button>("ShowReport").Visibility=Visibility.Visible;
+  }
   string preview=ArgumentValue("--preview");
   if(preview!=null){
    if(args.Contains("--busy")){apps[0].Selected=true;apps[3].Selected=true;apps[8].Selected=true;apps[0].Status="Installée";apps[3].Status="Téléchargement";apps[8].Status="Dans la file";title.Text="Acrobat Reader";completed.Text="1 / 3 terminée(s)";overall.Value=100.0/3;activity.Text="Téléchargement du programme d’installation · 62 %";activityBar.Visibility=Visibility.Visible;activityBar.Value=62;}

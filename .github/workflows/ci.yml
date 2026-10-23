@@ -25,6 +25,7 @@ jobs:
         run: |
           .\scripts\Test-Project.ps1
           .\scripts\Test-Engine.ps1
+          .\scripts\Test-Sources.ps1
       - name: Compile owned executable
         run: .\scripts\Build.ps1
       - name: Smoke-test embedded UI resources without installing apps
@@ -34,6 +35,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw 'Executable self-test failed.' }
           if (!(Test-Path -LiteralPath $result)) { throw 'Executable self-test did not produce a result.' }
           Get-Content -LiteralPath $result
+          .\scripts\Test-Reports.ps1
       - name: Upload explicitly unsigned build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

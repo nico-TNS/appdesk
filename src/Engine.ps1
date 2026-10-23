@@ -1,6 +1,7 @@
 ﻿param([Parameter(Mandatory=$true)][string]$JobPath,[switch]$Plan)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
+. (Join-Path $PSScriptRoot 'Sources.ps1')
 $job=Get-Content -LiteralPath $JobPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $run=Split-Path -Parent $JobPath
 $allowed=@('Google.Chrome','Mozilla.Firefox','Opera.Opera','Adobe.Acrobat.Reader.64-bit','WireGuard.WireGuard','Fortinet.VPN','OpenVPNTechnologies.OpenVPN','3CX.Softphone','Microsoft.Office')
@@ -16,6 +17,7 @@ function Office-Xml {
   <Product ID="$($job.Office)"><Language ID="fr-fr" /></Product>
  </Add>
  <Display Level="None" AcceptEULA="TRUE" />
+ <Updates Enabled="TRUE" />
  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
  <Property Name="AUTOACTIVATE" Value="0" />
 </Configuration>
@@ -28,8 +30,8 @@ function Winget-Arguments($id){
 }
 if($Plan){
     $operations=@(foreach($id in $job.Ids){
-        if($id -eq 'Microsoft.Office'){@{id=$id;xml=(Office-Xml);arguments=@('/configure','office.xml');silent=$true}}
-        elseif($id -eq 'Fortinet.VPN'){@{id=$id;requiresFullPackage=$true;arguments=@('/quiet','/norestart','/log','forticlient.log');silent=$true}}
+        if($id -eq 'Microsoft.Office'){@{id=$id;xml=(Office-Xml);source='Microsoft Download Center';latest=$true;arguments=@('/configure','office.xml');silent=$true}}
+        elseif($id -eq 'Fortinet.VPN'){@{id=$id;source=if($job.Forti){'Manual override'}else{'Fortinet official regional portal'};automatic=![bool]$job.Forti;arguments=@('/quiet','/norestart','/log','forticlient.log');silent=$true}}
         else{@{id=$id;arguments=@(Winget-Arguments $id);silent=$true}}
     })
     @{operations=$operations;installationStarted=$false}|ConvertTo-Json -Depth 8
@@ -52,13 +54,11 @@ function Verify-Signer($file,$publisher,$hash=''){
     $signature=Get-AuthenticodeSignature -LiteralPath $file
     if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $publisher){throw 'Signature numerique de lʼediteur invalide ou inattendue.'}
 }
-function Download($url,$file){
+function Download($url,$file,$hosts){
     Report 'Téléchargement' 'Connexion au serveur de téléchargement…'
-    [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
-    $request=[Net.HttpWebRequest]::Create($url);$request.Timeout=30000;$request.ReadWriteTimeout=30000
     $response=$null;$source=$null;$dest=$null
     try{
-        $response=$request.GetResponse();$length=$response.ContentLength
+        $response=Open-PublisherResponse $url $hosts;$length=$response.ContentLength
         $source=$response.GetResponseStream();$dest=[IO.File]::Create($file)
         $buffer=New-Object byte[] 262144;$received=0L;$last=[DateTime]::MinValue
         while(($n=$source.Read($buffer,0,$buffer.Length)) -gt 0){
@@ -71,6 +71,9 @@ function Download($url,$file){
         }
         if($length -ge 0 -and $received -ne $length){throw 'Telechargement incomplet.'}
     }finally{if($dest){$dest.Dispose()};if($source){$source.Dispose()};if($response){$response.Dispose()}}
+}
+function Record-Source($info,$file){
+    @{page=$info.Page;url=$info.Url;version=[string]$info.Version;sha256=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant();file=[IO.Path]::GetFileName($file)}|ConvertTo-Json -Compress|Add-Content -LiteralPath (Join-Path $run 'sources.jsonl') -Encoding UTF8
 }
 function Run-Hidden($file,$arguments,$prefix,$parseWinget=$false){
     $stdout=Join-Path $run ($prefix+'.stdout.log');$stderr=Join-Path $run ($prefix+'.stderr.log')
@@ -102,17 +105,34 @@ function Installed-Forti {
 }
 function Install-Forti {
     if((Installed-Forti) -and !$job.Update){return -1978335135} # 0x8A150061 : deja installe
-    if(!$job.Forti -or !(Test-Path -LiteralPath $job.Forti)){throw 'Selectionnez un package FortiClient VPN complet avant installation.'}
-    $extension=[IO.Path]::GetExtension($job.Forti).ToLowerInvariant()
+    $package=$job.Forti
+    if(!$package){
+        Report 'Recherche de version' 'Recherche du dernier package VPN x64 sur le portail officiel Fortinet…'
+        $info=Get-FortiSource
+        $package=Join-Path $run $info.FileName
+        Download $info.Url $package @('s3.cn-north-1.amazonaws.com.cn','filestore.fortinet.com')
+        Report 'Vérification' ('Vérification de FortiClient VPN '+$info.Version+' et de sa signature Fortinet…')
+        Test-FortiDownload $package $info.Version
+        Record-Source $info $package
+        if(Installed-Forti){
+            $installedVersions=@(foreach($root in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')){
+                if(Test-Path $root){Get-ItemProperty "$root\*" -ErrorAction SilentlyContinue|Where-Object {$_.DisplayName -match '^FortiClient VPN'}|ForEach-Object {$v=$null;if([version]::TryParse($_.DisplayVersion,[ref]$v)){$v}}}
+            })
+            if(!$installedVersions.Count){throw 'Version FortiClient installee inconnue : mise a jour automatique annulee.'}
+            if(($installedVersions|Sort-Object -Descending|Select-Object -First 1) -ge $info.Version){return -1978335135}
+        }
+    }
+    if(!(Test-Path -LiteralPath $package)){throw 'Le package FortiClient selectionne est introuvable.'}
+    $extension=[IO.Path]::GetExtension($package).ToLowerInvariant()
     if($extension -notin @('.msi','.exe')){throw 'Format de package FortiClient non pris en charge.'}
     $copy=Join-Path $run ('FortiClient-package'+$extension)
     Report 'Vérification' 'Copie et vérification du package FortiClient VPN…'
-    Copy-Item -LiteralPath $job.Forti -Destination $copy
+    Copy-Item -LiteralPath $package -Destination $copy
     Verify-Signer $copy 'O=("?Fortinet(?:,? Inc\.?)?"?|Fortinet Technologies \(Canada\) ULC)(,|$)'
     $log=Join-Path $run 'forticlient-msi.log'
     if($extension -eq '.exe'){
         $version=(Get-Item -LiteralPath $copy).VersionInfo
-        if((Get-Item -LiteralPath $copy).Length -lt 20000000 -or $version.FileDescription -match 'online' -or (($version.FileDescription+' '+$version.ProductName+' '+[IO.Path]::GetFileName($job.Forti)) -notmatch 'FortiClient.?VPN')){throw 'Le lanceur en ligne ne permet pas une installation silencieuse garantie. Utilisez le package VPN complet.'}
+        if((Get-Item -LiteralPath $copy).Length -lt 20000000 -or $version.FileDescription -match 'online' -or (($version.FileDescription+' '+$version.ProductName+' '+[IO.Path]::GetFileName($package)) -notmatch 'FortiClient.?VPN')){throw 'Le lanceur en ligne ne permet pas une installation silencieuse garantie. Utilisez le package VPN complet.'}
         Report 'Installation' 'Installation silencieuse de FortiClient VPN…'
         $code=Run-Hidden $copy @('/quiet','/norestart','/log',('"'+$log+'"')) 'fortinet'
     }else{
@@ -134,23 +154,24 @@ function Install-Office {
     foreach($key in @('HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration')){
         $existing=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
         if($existing.ProductReleaseIds){
-            if(([string]$existing.ProductReleaseIds -split ',') -contains [string]$job.Office){return -1978335135}
-            throw 'Une autre edition Office est deja presente. Aucune desinstallation automatique nʼa ete effectuee.'
+            if(([string]$existing.ProductReleaseIds -split ',') -contains [string]$job.Office){
+                if(!$job.Update){return -1978335135}
+                if($existing.Platform -and $existing.Platform -ne 'x64'){throw 'Office 32 bits est deja present. La mise a jour x64 necessite une migration manuelle.'}
+            }else{throw 'Une autre edition Office est deja presente. Aucune desinstallation automatique nʼa ete effectuee.'}
         }
     }
-    $local=Join-Path $env:USERPROFILE 'Nextcloud\Commun\Installateurs\Office\setup.exe'
     $setup=Join-Path $run 'office-setup.exe'
-    if(Test-Path -LiteralPath $local){Copy-Item -LiteralPath $local -Destination $setup;Verify-Signer $setup 'O=Microsoft Corporation'}
-    else{
+    Report 'Recherche de version' 'Recherche du dernier Office Deployment Tool chez Microsoft…'
+    $info=Get-OfficeSource
         $odt=Join-Path $run 'OfficeDeploymentTool.exe'
-        Download 'https://download.microsoft.com/download/6c1eeb25-cf8b-41d9-8d0d-cc1dbc032140/officedeploymenttool_20430-20146.exe' $odt
+        Download $info.Url $odt @('download.microsoft.com')
         Report 'Vérification' 'Vérification de lʼoutil officiel Microsoft…'
-        Verify-Signer $odt 'O=Microsoft Corporation' 'af1594121ab610cd8abc3dd6ff0a504e0cbc6ce54372e5c3813926352d1179c6'
+        Verify-Signer $odt 'O=Microsoft Corporation'
+        Record-Source $info $odt
         $code=Run-Hidden $odt @('/quiet',('/extract:"'+$run+'"')) 'office-extract'
         if($code -ne 0){throw "Extraction Office : code $code."}
         Copy-Item -LiteralPath (Join-Path $run 'setup.exe') -Destination $setup
         Verify-Signer $setup 'O=Microsoft Corporation'
-    }
     $xml=Join-Path $run 'office.xml';[IO.File]::WriteAllText($xml,(Office-Xml),(New-Object Text.UTF8Encoding($false)))
     Report 'Installation' 'Téléchargement et installation Office en arrière-plan. Cette étape peut être longue.'
     $code=Run-Hidden $setup @('/configure',('"'+$xml+'"')) 'office'
@@ -160,6 +181,7 @@ function Install-Office {
     }
     return $code
 }
+$wingetRefreshed=$false
 try{
     Save-State
     foreach($id in $job.Ids){
@@ -178,6 +200,12 @@ try{
             elseif($id -eq 'Microsoft.Office'){$code=Install-Office}
             else{
                 if(!$job.Winget -or !(Test-Path -LiteralPath $job.Winget)){throw 'WinGet est introuvable.'}
+                if(!$wingetRefreshed){
+                    Report 'Mise à jour du catalogue' 'Actualisation de la source WinGet avant résolution des versions…'
+                    $refresh=Run-Hidden $job.Winget @('source','update','--name','winget','--disable-interactivity') 'winget-source'
+                    if($refresh -ne 0){throw 'Actualisation du catalogue WinGet impossible. Reessayez avec une connexion Internet.'}
+                    $wingetRefreshed=$true
+                }
                 Report 'Téléchargement / installation' 'Résolution de la version actuelle et installation silencieuse…'
                 $code=Run-Hidden $job.Winget (Winget-Arguments $id) $id $true
             }

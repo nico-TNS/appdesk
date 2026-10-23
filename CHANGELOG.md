@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.0-preview.1 — automatic sources and integrated report (file version 2.1.0.0)
+
+- Resolve the current Office Deployment Tool from Microsoft, without reusing old local tools.
+- Resolve full FortiClient VPN x64 packages from the official regional portal, verify publisher/version, and prevent automatic downgrades.
+- Refresh WinGet once per queue; enable selected-application updates by default.
+- Display a final report for success, failure, interruptions and stopping, with details, export and local logs.
+- Keep Office edition/architecture conflicts visible rather than silently replacing Office.
+
 ## v2.0.0-preview.1 — first unsigned preview (file version 2.0.0.0)
 
 - Native WPF interface and single portable executable.

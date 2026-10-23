@@ -1,4 +1,4 @@
-name: Publish preview assets
+name: Publish unsigned preview
 on:
   push:
     branches: [main]
@@ -9,29 +9,34 @@ permissions:
 jobs:
   publish:
     runs-on: windows-2022
+    timeout-minutes: 20
     permissions:
-      actions: read
       contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        shell: powershell
     steps:
-      - name: Verify source run and download its artifact
-        shell: pwsh
+      - name: Checkout reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate project, engine and sources
         run: |
-          $ErrorActionPreference = 'Stop'
-          $run = gh api repos/$env:GH_REPO/actions/runs/39933286305 | ConvertFrom-Json
-          if ($run.conclusion -ne 'success' -or $run.head_sha -ne 'c1e681ceab6826b0bbed069396fe19520ebcccd4') { throw 'Unexpected build provenance' }
-          $release = gh release view v2.0.0-preview.1 --json tagName,isPrerelease | ConvertFrom-Json
-          if (-not $release.isPrerelease) { throw 'Expected prerelease' }
-          gh run download 39933286305 -n AppDesk-unsigned-c1e681ceab6826b0bbed069396fe19520ebcccd4 -D assets
-          if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed' }
-          $hash = (Get-FileHash assets/MonInstallateur.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '56b3864e935792704fc684237ef64710b9b4588b059bc4992fe4486b4de05cc4') { throw 'Unexpected executable hash' }
-          $line = (Get-Content assets/SHA256SUMS.txt -Raw).Trim()
-          if ($line -ne "$hash  MonInstallateur.exe") { throw 'Checksum file mismatch' }
-      - name: Attach verified unsigned executable
-        shell: pwsh
+          .\scripts\Test-Project.ps1
+          .\scripts\Test-Engine.ps1
+          .\scripts\Test-Sources.ps1
+      - name: Compile and verify executable
         run: |
-          gh release upload v2.0.0-preview.1 assets/MonInstallateur.exe assets/SHA256SUMS.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
+          .\scripts\Build.ps1
+          $result = Join-Path $env:RUNNER_TEMP 'self-test.txt'
+          $p = Start-Process -FilePath "$pwd\dist\MonInstallateur.exe" -ArgumentList @('--self-test', ('"' + $result + '"')) -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path $result)) { throw 'Executable self-test failed.' }
+          .\scripts\Test-Reports.ps1
+      - name: Publish explicitly unsigned preview and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ((Get-Content VERSION -Raw).Trim() -ne '2.1.0.0') { throw 'Unexpected preview version.' }
+          gh release create v2.1.0-preview.1 dist/MonInstallateur.exe dist/SHA256SUMS.txt --target $env:GITHUB_SHA --prerelease --title "AppDesk 2.1 - versions automatiques et rapport intégré" --notes-file docs/releases/v2.1.0-preview.1.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

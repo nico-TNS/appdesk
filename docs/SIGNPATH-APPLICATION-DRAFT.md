@@ -14,7 +14,7 @@
 
 ## Description
 
-AppDesk is a small Windows desktop application for selecting and installing common workstation applications. Its portable WPF executable embeds our own UI, catalog and PowerShell execution engine. It uses the Windows Package Manager for most packages, the official Office Deployment Tool for Office, and a user-supplied full official FortiClient VPN package. It does not bundle or request signing of those vendors’ binaries.
+AppDesk is a small Windows desktop application for selecting and installing common workstation applications. Its portable WPF executable embeds our own UI, catalog, PowerShell execution engine and source resolver. It uses Windows Package Manager for most packages, resolves the current Office Deployment Tool from Microsoft, and resolves signed full FortiClient VPN x64 packages from Fortinet's official regional portal. A manual FortiClient override is optional. Source/redirect hosts and catalog IDs are allowlisted. It does not bundle or request signing of those vendors' binaries. An integrated final report lists results, errors and unprocessed applications.
 
 Users explicitly select applications, accept the relevant terms and authorize the installation queue through Windows UAC. The UI shows progress and per-application results. No unattended task, service or startup persistence is created. Uninstallation instructions are documented. Office licensing, VPN profiles and 3CX accounts remain the user’s responsibility.
 

@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 foreach($required in @('LICENSE','VERSION','README.md','CODE_SIGNING.md','PRIVACY.md','SECURITY.md','THIRD_PARTY.md','docs\UNINSTALL.md','src\App.cs','src\Interface.xaml','src\Engine.ps1','signpath\artifact-configuration.xml')){
     if(!(Test-Path -LiteralPath (Join-Path $root $required))){throw "Missing required project file: $required"}
@@ -15,7 +15,7 @@ foreach($attribute in @('AssemblyVersion','AssemblyFileVersion','AssemblyInforma
 }
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase,System.Xaml
 $window=[Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText((Join-Path $root 'src\Interface.xaml')))
-foreach($name in @('Overall','ActivityBar','Cards','Install','OfficeEdition','ChooseForti','OpenLogs')){if(!$window.FindName($name)){throw "Missing UI control $name"}}
+foreach($name in @('Overall','ActivityBar','Cards','Install','OfficeEdition','ChooseForti','AutoForti','OpenLogs','ReportPanel','ReportRows','ReportSummary','ExportReport','BackToApps','ShowReport')){if(!$window.FindName($name)){throw "Missing UI control $name"}}
 $window.Close()
 $xml=New-Object Xml.XmlDocument
 $xml.XmlResolver=$null

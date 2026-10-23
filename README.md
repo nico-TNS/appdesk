@@ -2,17 +2,18 @@
 
 Installateur Windows personnel, libre et portable, avec sélection d’applications, installation silencieuse et suivi de progression. Licence [MIT](LICENSE).
 
-**État : première préversion non signée (`v2.0.0-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
+**État : préversion non signée (`v2.1.0-preview.1`). La candidature SignPath n’a pas été envoyée et aucune signature de production n’a été obtenue.** Dépôt officiel : [nico-TNS/appdesk](https://github.com/nico-TNS/appdesk).
 
 ![Interface AppDesk, état de progression illustratif](docs/screenshot.png)
 
 ## Fonctionnalités
 
 - Chrome, Firefox, Opera, Acrobat Reader, WireGuard, OpenVPN Community, client Windows 3CX et Office.
-- FortiClient VPN à partir d’un package complet officiel fourni par l’utilisateur.
+- FortiClient VPN téléchargé automatiquement depuis le portail officiel régional Fortinet, avec vérification de sa signature et de sa version. Package local facultatif.
 - Choix entre six éditions Office : Microsoft 365 Business/Enterprise, Office 2024 Famille et Petite Entreprise/Professionnel et LTSC 2024 Standard/Professionnel Plus.
 - Une fenêtre de suivi, progression globale par applications traitées et activité par application.
-- Mise à jour optionnelle des applications gérées par WinGet, arrêt après l’application en cours, journaux locaux.
+- Mise à jour des applications sélectionnées activée par défaut, arrêt après l’application en cours, bilan final intégré et exportable.
+- Résolution en ligne du dernier outil Office et de la version disponible du canal choisi. Voir [la politique des sources](docs/SOURCES.md).
 
 ## Installation et utilisation
 
@@ -30,8 +31,8 @@ La progression globale mesure les applications traitées, y compris les échecs 
 
 - L’exécutable non signé a été bloqué par le contrôle des applications du poste de développement. Aucun réglage de sécurité n’a été modifié pour le lancer.
 - La compilation, les plans silencieux et les simulations passent localement. Les tests réels de l’exécutable et des installations restent à effectuer dans un environnement autorisé. La [CI GitHub Actions](https://github.com/nico-TNS/appdesk/actions/runs/39933286305) a réussi, y compris le test natif des ressources embarquées.
-- FortiClient nécessite son MSI/EXE VPN **complet et signé par Fortinet**. Le petit lanceur en ligne est refusé ; aucun téléchargement tiers de substitution n’est utilisé.
-- Office nécessite une licence et une activation normales. Une autre édition Click-to-Run présente n’est pas désinstallée automatiquement. Une édition identique est conservée.
+- FortiClient utilise la dernière version VPN x64 complète publiée sur le portail régional officiel. Elle peut différer du canal mondial. Si la source change ou devient inaccessible, une erreur est affichée ; le petit lanceur interactif reste refusé.
+- Office nécessite une licence et une activation normales. Une autre édition Click-to-Run présente n’est pas désinstallée automatiquement. Une édition identique x64 peut être actualisée si les mises à jour sont cochées.
 - Les profils VPN et les comptes 3CX restent à configurer. Le mode silencieux dépend du comportement de chaque version d’installateur.
 
 ## Construire et vérifier
@@ -41,6 +42,7 @@ Dans Windows PowerShell 5.1 :
 ```powershell
 .\scripts\Test-Project.ps1
 .\scripts\Test-Engine.ps1
+.\scripts\Test-Sources.ps1
 .\scripts\Build.ps1
 ```
 
