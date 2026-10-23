@@ -1,0 +1,19 @@
+name: Fix release title encoding
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-release-title.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fix-title:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Correct preview title using UTF-8
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit v2.3.0-preview.1 --title "AppDesk 2.3 - fiabilité des téléchargements et installations"
